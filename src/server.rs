@@ -15,10 +15,10 @@ async fn connect_handler(
 ) -> Result<(), Box<dyn Error>> {
     for _ in 1..=5 {
         match pool.take().await {
-            Some(mut keeper) => {
+            Some(keeper) => {
                 // Send CONNECT request to upstream first.
                 match keeper.send_first_connect(req).await {
-                    Ok((mut reader, mut writer)) => {
+                    Ok((mr, mw)) => {
                         respond_without_body(
                             &mut stream,
                             200,
@@ -32,7 +32,9 @@ async fn connect_handler(
                             keeper.addr.to_string(),
                             req.get_uri()
                         );
-                        weld_for_rw(&mut stream, &mut reader, &mut writer).await;
+                        let mut reader = mr.lock().await;
+                        let mut writer = mw.lock().await;
+                        weld_for_rw(&mut stream, &mut *reader, &mut *writer).await;
                         return Ok(());
                     }
                     Err(_) => {
@@ -64,7 +66,7 @@ async fn join_handler(
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
     respond_without_body(&mut stream, 200, "Welcome", req.get_version()).await?;
-    pool.insert(stream).await;
+    pool.join(stream).await;
     Ok(())
 }
 

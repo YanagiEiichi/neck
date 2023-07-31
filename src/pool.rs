@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use tokio::{
     io::AsyncWriteExt,
@@ -7,12 +7,11 @@ use tokio::{
         TcpStream,
     },
     sync::Mutex,
-    task::JoinHandle,
 };
 
 use crate::http::{HttpRequestBasic, HttpResponse, HttpResponseBasic};
 
-type STORAGE = Arc<Mutex<HashMap<SocketAddr, Keeper>>>;
+type STORAGE = Arc<Mutex<HashMap<SocketAddr, Arc<Keeper>>>>;
 
 pub(crate) struct Pool {
     storage: STORAGE,
@@ -29,12 +28,22 @@ impl Pool {
         self.storage.lock().await.len()
     }
 
-    pub async fn insert(&self, stream: TcpStream) {
-        let keeper = Keeper::new(stream, self.storage.clone());
-        self.storage.lock().await.insert(keeper.addr, keeper);
+    pub async fn join(&self, stream: TcpStream) {
+        let shared_keeper = Arc::new(Keeper::new(stream));
+        let keeper = shared_keeper.clone();
+        self.storage.lock().await.insert(shared_keeper.addr, shared_keeper);
+
+        let mut read = keeper.r.lock().await;
+        let mut first_responses = keeper.first_response.lock().await;
+        *first_responses = match HttpResponseBasic::read_from(&mut *read).await {
+            Ok(res) => Ok(res),
+            Err(e) => Err(e.to_string()),
+        };
+
+        self.storage.lock().await.remove(&keeper.addr);
     }
 
-    pub async fn take(&self) -> Option<Keeper> {
+    pub async fn take(&self) -> Option<Arc<Keeper>> {
         let mut map = self.storage.lock().await;
         let key = *map.keys().into_iter().next()?;
         map.remove(&key)
@@ -43,66 +52,45 @@ impl Pool {
 
 pub struct Keeper {
     pub addr: SocketAddr,
-    pub heap: Option<(
-        OwnedWriteHalf,
-        JoinHandle<(OwnedReadHalf, Result<HttpResponseBasic, String>)>,
-    )>,
+    pub w: Arc<Mutex<OwnedWriteHalf>>,
+    pub r: Arc<Mutex<OwnedReadHalf>>,
+    pub first_response: Arc<Mutex<Result<HttpResponseBasic, String>>>,
 }
 
 impl Keeper {
-    pub fn new(stream: TcpStream, storage: STORAGE) -> Keeper {
+    pub fn new(stream: TcpStream) -> Keeper {
         let addr = stream.peer_addr().unwrap();
-        let (mut reader, writter) = stream.into_split();
+        let (orh, owh) = stream.into_split();
 
-        let first_response: JoinHandle<(OwnedReadHalf, Result<HttpResponseBasic, String>)> =
-            tokio::spawn(async move {
-                let res = match HttpResponseBasic::read_from(&mut reader).await {
-                    Ok(res) => Ok(res),
-                    Err(e) => Err(e.to_string()),
-                };
-                storage.lock().await.remove(&addr);
-                (reader, res)
-            });
+        let r = Arc::new(Mutex::new(orh));
+        let w = Arc::new(Mutex::new(owh));
+        let first_response = Arc::new(Mutex::new(Err(String::new())));
 
         Self {
             addr,
-            heap: Some((writter, first_response)),
+            w,
+            r,
+            first_response
         }
     }
 
-    async fn inner_send_first_connect(
-        &mut self,
-        req: &HttpRequestBasic,
-    ) -> Result<
-        (
-            OwnedWriteHalf,
-            OwnedReadHalf,
-            Result<HttpResponseBasic, String>,
-        ),
-        Box<dyn Error>,
-    > {
-        let (mut writer, first_response) = self.heap.take().unwrap();
-        writer.write(req.to_string().as_bytes()).await?;
-        let (reader, result) = first_response.await?;
-        Ok((writer, reader, result))
-    }
-
     pub async fn send_first_connect(
-        &mut self,
+        &self,
         req: &HttpRequestBasic,
-    ) -> Result<(OwnedReadHalf, OwnedWriteHalf), String> {
-        match self.inner_send_first_connect(req).await {
-            Ok((writer, reader, result)) => match result {
-                Ok(res) => {
-                    if res.get_status() == 200 {
-                        Ok((reader, writer))
-                    } else {
-                        Err(format!("Fail to CONNECT, got {}", res.get_status()))
-                    }
+    ) -> Result<(&Mutex<OwnedReadHalf>, &Mutex<OwnedWriteHalf>), String> {
+        self.w.lock().await.write(req.to_string().as_bytes()).await.map_err(|e| e.to_string())?;
+
+        let first_response = self.first_response.lock().await;
+
+        match &*first_response {
+            Ok(res) => {
+                if res.get_status() == 200 {
+                    Ok((&self.r, &self.w))
+                } else {
+                    Err(format!("Fail to CONNECT, got {}", res.get_status()))
                 }
-                Err(msg) => Err(msg),
-            },
-            Err(e) => Err(e.to_string()),
+            }
+            Err(msg) => Err(msg.clone()),
         }
     }
 }

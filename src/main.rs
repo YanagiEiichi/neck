@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 
 mod client;
 mod http;
+mod neck;
 mod pool;
 mod server;
 mod utils;

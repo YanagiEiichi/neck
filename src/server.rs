@@ -3,114 +3,117 @@ use std::{error::Error, sync::Arc};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
-    http::{HttpRequest, HttpRequestBasic},
+    http::{HttpRequest, HttpRequestBasic, HttpResponse},
+    neck::NeckStream,
     pool::Pool,
-    utils::{respond, respond_without_body, weld_for_rw},
 };
 
 async fn connect_handler(
-    mut stream: TcpStream,
+    stream: NeckStream,
     req: &HttpRequestBasic,
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
-    for _ in 1..=5 {
-        match pool.take().await {
-            Some(keeper) => {
-                // Send CONNECT request to upstream first.
-                match keeper.send_first_connect(req).await {
-                    Ok((mr, mw)) => {
-                        respond_without_body(
-                            &mut stream,
-                            200,
-                            "Connection Established",
-                            req.get_version(),
-                        )
-                        .await?;
-                        println!(
-                            "{} -> {}: CONNECT {}",
-                            stream.peer_addr().unwrap().to_string(),
-                            keeper.addr.to_string(),
-                            req.get_uri()
-                        );
-                        let mut reader = mr.lock().await;
-                        let mut writer = mw.lock().await;
-                        weld_for_rw(&mut stream, &mut *reader, &mut *writer).await;
-                        return Ok(());
-                    }
-                    Err(_) => {
-                        // Bad keeper connection, can retry.
-                        continue;
-                    }
-                }
-            }
-            None => {
-                // Empty pool.
+    'end: {
+        for _ in 1..=5 {
+            let o = pool.take().await;
+            if o.is_none() {
                 break;
             }
+
+            let keeper = o.unwrap();
+
+            keeper
+                .stream
+                .write(req.to_string())
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let first_response = keeper.first_response.lock().await;
+            if first_response.is_err() {
+                continue;
+            }
+
+            let res = first_response.as_ref().unwrap();
+
+            if let 200 = res.get_status() {
+                stream
+                    .respond(200, "Connection Established", req.get_version(), "")
+                    .await?;
+
+                println!(
+                    "{} -> {}: CONNECT {}",
+                    stream.peer_addr().to_string(),
+                    keeper.stream.peer_addr().to_string(),
+                    req.get_uri()
+                );
+                keeper.stream.weld(&stream).await;
+            } else {
+                stream
+                    .respond(503, res.get_text(), req.get_version(), res.get_payload())
+                    .await?;
+            }
+            break 'end;
         }
+        stream
+            .respond(
+                502,
+                "Bad Gateway",
+                req.get_version(),
+                "Connections are not available\n",
+            )
+            .await?;
     }
-    respond(
-        &mut stream,
-        502,
-        "Bad Gateway",
-        req.get_version(),
-        "Connections are not available\n",
-    )
-    .await?;
     Ok(())
 }
 
 async fn join_handler(
-    mut stream: TcpStream,
+    stream: NeckStream,
     req: &HttpRequestBasic,
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
-    respond_without_body(&mut stream, 200, "Welcome", req.get_version()).await?;
+    stream
+        .respond(200, "Welcome", req.get_version(), "")
+        .await?;
     pool.join(stream).await;
     Ok(())
 }
 
 async fn get_handler(
-    mut stream: TcpStream,
+    stream: NeckStream,
     req: &HttpRequestBasic,
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
     match req.get_uri().as_str() {
         "/pool/len" => {
             let payload = pool.len().await.to_string() + "\n";
-            respond(&mut stream, 200, "OK", req.get_version(), &payload).await?;
+            stream
+                .respond(200, "OK", req.get_version(), &payload)
+                .await?;
         }
         _ => {
-            respond(
-                &mut stream,
-                404,
-                "Not Found",
-                req.get_version(),
-                "Not Found\n",
-            )
-            .await?;
+            stream
+                .respond(404, "Not Found", req.get_version(), "Not Found\n")
+                .await?;
         }
     }
     Ok(())
 }
 
-async fn reject_handler(
-    mut stream: TcpStream,
-    req: &HttpRequestBasic,
-) -> Result<(), Box<dyn Error>> {
-    respond(
-        &mut stream,
-        405,
-        "Method Not Allowed",
-        req.get_version(),
-        format!("Method '{}' not allowed\n", req.get_method()).as_str(),
-    )
-    .await?;
+async fn reject_handler(stream: NeckStream, req: &HttpRequestBasic) -> Result<(), Box<dyn Error>> {
+    stream
+        .respond(
+            405,
+            "Method Not Allowed",
+            req.get_version(),
+            format!("Method '{}' not allowed\n", req.get_method()).as_str(),
+        )
+        .await?;
     Ok(())
 }
 
-async fn dispatch(mut stream: TcpStream, pool: Arc<Pool>) {
-    let req = HttpRequestBasic::read_from(&mut stream).await.unwrap();
+async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) {
+    let stream = NeckStream::new(tcp_stream);
+    let req = stream.read_http_request().await.unwrap();
     let res = match req.get_method().as_str() {
         "CONNECT" => connect_handler(stream, &req, pool).await,
         "JOIN" => join_handler(stream, &req, pool).await,

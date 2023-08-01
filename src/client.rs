@@ -1,28 +1,29 @@
 use std::{error::Error, ops::Add, time::Duration};
 
-use tokio::{io::AsyncWriteExt, net::TcpStream, time};
+use tokio::{net::TcpStream, time};
 
 use crate::{
-    http::{HttpRequest, HttpRequestBasic, HttpResponse, HttpResponseBasic},
-    utils::{respond, respond_without_body, weld, NeckError},
+    http::{HttpRequest, HttpRequestBasic, HttpResponse},
+    neck::NeckStream,
+    utils::NeckError,
 };
 
 async fn wait_until_http_proxy_connect(
-    stream: &mut TcpStream,
+    stream: &NeckStream,
 ) -> Result<HttpRequestBasic, Box<dyn Error>> {
-    let req: HttpRequestBasic = HttpRequestBasic::read_from(stream).await?;
+    let req: HttpRequestBasic = stream.read_http_request().await?;
+    println!("req = {:#?}", req);
     if req.get_method().eq("CONNECT") {
-        respond_without_body(stream, 200, "Connection Established", req.get_version()).await?;
         Ok(req)
     } else {
-        respond(
-            stream,
-            405,
-            "Method Not Allowed",
-            req.get_version(),
-            format!("Method '{}' not allowed\n", req.get_method()).as_str(),
-        )
-        .await?;
+        stream
+            .respond(
+                405,
+                "Method Not Allowed",
+                req.get_version(),
+                format!("Method '{}' not allowed\n", req.get_method()).as_str(),
+            )
+            .await?;
         Err(Box::new(NeckError::new(format!(
             "Bad HTTP method {}",
             req.get_method()
@@ -30,11 +31,11 @@ async fn wait_until_http_proxy_connect(
     }
 }
 
-async fn connect_and_join(addr: &str) -> Result<TcpStream, Box<dyn Error>> {
-    let mut stream = TcpStream::connect(addr).await?;
+async fn connect_and_join(addr: &str) -> Result<NeckStream, Box<dyn Error>> {
+    let stream = NeckStream::new(TcpStream::connect(addr).await?);
     let req = HttpRequestBasic::new("JOIN", "*", "HTTP/1.1");
-    stream.write(req.to_string().as_bytes()).await?;
-    let res = HttpResponseBasic::read_from(&mut stream).await?;
+    stream.write(req.to_string()).await?;
+    let res = stream.read_http_response().await?;
     if res.get_status() == 200 {
         Ok(stream)
     } else {
@@ -46,31 +47,27 @@ async fn connect_and_join(addr: &str) -> Result<TcpStream, Box<dyn Error>> {
 }
 
 async fn setup_connection(addr: &str) -> Result<(), Box<dyn Error>> {
-    let mut stream = connect_and_join(addr).await?;
-    println!(
-        "Connection {} ready",
-        stream.local_addr().unwrap().to_string()
-    );
-    let req = wait_until_http_proxy_connect(&mut stream).await?;
+    let stream = connect_and_join(addr).await?;
+    println!("Connection {} ready", stream.local_addr());
+    let req = wait_until_http_proxy_connect(&stream).await?;
     match TcpStream::connect(req.get_uri().as_str()).await {
-        Ok(mut upstream) => {
-            println!(
-                "Connect to {} for {}",
-                req.get_uri(),
-                stream.local_addr().unwrap()
-            );
-            weld(&mut stream, &mut upstream).await;
+        Ok(upstream) => {
+            stream
+                .respond(200, "Connection Established", req.get_version(), "")
+                .await?;
+            println!("Connect to {} for {}", req.get_uri(), stream.local_addr());
+            stream.weld(&NeckStream::new(upstream)).await;
             Ok(())
         }
         Err(e) => {
-            respond(
-                &mut stream,
-                503,
-                "Service Unavailable",
-                req.get_version(),
-                (e.to_string() + "\n").as_str(),
-            )
-            .await?;
+            stream
+                .respond(
+                    503,
+                    "Service Unavailable",
+                    req.get_version(),
+                    (e.to_string() + "\n").as_str(),
+                )
+                .await?;
             Err(Box::new(NeckError::new(format!(
                 "Failed to connect {}",
                 req.get_uri()

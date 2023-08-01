@@ -1,22 +1,21 @@
 use std::error::Error;
 
-use tokio::io::{AsyncBufReadExt, AsyncRead};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
 
 use tokio::io::BufReader;
 
 use crate::utils::NeckError;
 
-async fn read_lines<T>(stream: T) -> Result<Vec<String>, Box<dyn Error>>
+async fn read_lines<T>(stream: &mut BufReader<T>) -> Result<Vec<String>, Box<dyn Error>>
 where
     T: Unpin,
     T: AsyncRead,
 {
-    let mut reader = BufReader::new(stream);
     let mut lines: Vec<String> = Vec::new();
     let mut buf = String::new();
     loop {
         buf.clear();
-        match reader.read_line(&mut buf).await? {
+        match stream.read_line(&mut buf).await? {
             // Received EOF.
             0 => {
                 return Err(Box::new(NeckError::new(format!(
@@ -51,13 +50,16 @@ pub trait HttpRequest {
     fn get_uri(&self) -> &String;
     fn get_version(&self) -> &String;
     fn get_headers(&self) -> &Vec<String>;
+    fn get_payload(&self) -> &String;
 }
 
 type FirstLine = (String, String, String);
 
+#[derive(Debug)]
 pub struct HttpProtocol {
     first_line: FirstLine,
     headers: Vec<String>,
+    payload: String,
 }
 
 impl HttpProtocol {
@@ -65,15 +67,18 @@ impl HttpProtocol {
         HttpProtocol {
             first_line,
             headers,
+            payload: String::from(""),
         }
     }
-    pub async fn read_from<T: AsyncRead>(stream: T) -> Result<HttpProtocol, Box<dyn Error>>
+    pub async fn read_from<T: AsyncRead>(
+        stream: &mut BufReader<T>,
+    ) -> Result<HttpProtocol, Box<dyn Error>>
     where
         T: Unpin,
     {
         let lines = read_lines(stream).await?;
         let mut parts = lines[0].trim().splitn(3, ' ');
-        let hp = HttpProtocol::new(
+        let mut hp = HttpProtocol::new(
             (
                 String::from(parts.next().unwrap_or("")),
                 String::from(parts.next().unwrap_or("")),
@@ -81,7 +86,45 @@ impl HttpProtocol {
             ),
             lines[1..].to_vec(),
         );
+        hp.payload = hp.read_payload(stream).await?;
         Ok(hp)
+    }
+
+    pub fn get_header(&self, key: &str) -> Option<String> {
+        let l_key = key.to_lowercase();
+        for line in &self.headers {
+            if let Some(p) = line.find(':') {
+                if (&line[..p]).to_lowercase().eq(&l_key) {
+                    return Some(line[p + 1..].trim().to_string());
+                }
+            }
+        }
+        None
+    }
+
+    async fn read_payload<T>(&self, stream: &mut BufReader<T>) -> Result<String, Box<dyn Error>>
+    where
+        T: Unpin,
+        T: AsyncRead,
+    {
+        'a: {
+            if let Some(value) = self.get_header("Content-Length") {
+                let len = value.parse::<u64>()?;
+                if len == 0 {
+                    break 'a;
+                }
+                let mut buf = String::new();
+                match stream.take(len).read_to_string(&mut buf).await {
+                    Ok(_) => {
+                        return Ok(buf);
+                    }
+                    Err(e) => {
+                        return Err(Box::new(e));
+                    }
+                }
+            }
+        }
+        Ok(String::from(""))
     }
 }
 
@@ -99,10 +142,14 @@ impl ToString for HttpProtocol {
             r.push_str("\r\n");
         }
         r.push_str("\r\n");
+        if !self.payload.is_empty() {
+            r.push_str(&self.payload);
+        }
         r
     }
 }
 
+#[derive(Debug)]
 pub struct HttpRequestBasic {
     protocol: HttpProtocol,
 }
@@ -121,11 +168,12 @@ impl HttpRequestBasic {
         }
     }
 
-    pub async fn read_from<T: AsyncRead>(
-        mut stream: &mut T,
+    pub async fn read_from<T>(
+        mut stream: &mut BufReader<T>,
     ) -> Result<HttpRequestBasic, Box<dyn Error>>
     where
         T: Unpin,
+        T: AsyncRead,
     {
         Ok(HttpRequestBasic {
             protocol: HttpProtocol::read_from(&mut stream).await?,
@@ -149,6 +197,10 @@ impl HttpRequest for HttpRequestBasic {
     fn get_headers(&self) -> &Vec<String> {
         &self.protocol.headers
     }
+
+    fn get_payload(&self) -> &String {
+        &self.protocol.payload
+    }
 }
 
 impl ToString for HttpRequestBasic {
@@ -163,6 +215,7 @@ pub trait HttpResponse {
     fn get_status(&self) -> u16;
     fn get_text(&self) -> &String;
     fn get_headers(&self) -> &Vec<String>;
+    fn get_payload(&self) -> &String;
 }
 
 pub struct HttpResponseBasic {
@@ -170,14 +223,16 @@ pub struct HttpResponseBasic {
 }
 
 impl HttpResponseBasic {
-    pub async fn read_from<T>(stream: T) -> Result<HttpResponseBasic, Box<dyn Error>>
+    pub async fn read_from<T>(
+        stream: &mut BufReader<T>,
+    ) -> Result<HttpResponseBasic, Box<dyn Error>>
     where
         T: Unpin,
         T: AsyncRead,
     {
-        Ok(HttpResponseBasic {
-            protocol: HttpProtocol::read_from(stream).await?,
-        })
+        let protocol = HttpProtocol::read_from(stream).await?;
+
+        Ok(HttpResponseBasic { protocol })
     }
 }
 
@@ -200,6 +255,10 @@ impl HttpResponse for HttpResponseBasic {
 
     fn get_headers(&self) -> &Vec<String> {
         &self.protocol.headers
+    }
+
+    fn get_payload(&self) -> &String {
+        &self.protocol.payload
     }
 }
 

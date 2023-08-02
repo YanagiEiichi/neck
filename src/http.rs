@@ -6,6 +6,7 @@ use tokio::io::BufReader;
 
 use crate::utils::NeckError;
 
+/// Read a group of lines ending with an empty line from a BufReader.
 async fn read_lines<T>(stream: &mut BufReader<T>) -> Result<Vec<String>, Box<dyn Error>>
 where
     T: Unpin,
@@ -14,33 +15,30 @@ where
     let mut lines: Vec<String> = Vec::new();
     let mut buf = String::new();
     loop {
+        // The `buf` memory space is reused, so it must be cleared each time it is used.
         buf.clear();
-        match stream.read_line(&mut buf).await? {
-            // Received EOF.
-            0 => {
-                return Err(Box::new(NeckError::new(format!(
-                    "Connection closed by peer"
-                ))));
-            }
-            // Received bytes.
-            _ => {
-                let s = String::from(buf.trim_end());
-                // It is an empty line.
-                if s.is_empty() {
-                    // First line has not received.
-                    if lines.is_empty() {
-                        // Continue to read, empty line can be ignored in this time.
-                        continue;
-                    } else {
-                        break;
-                    }
-                }
-                // It is not an empty line, recoed it.
-                else {
-                    lines.push(s);
-                }
+
+        // Normally, the `read` method will wait for any bytes received, so zero bytes read indicate an EOF received.
+        if stream.read_line(&mut buf).await? == 0 {
+            return Err(NeckError::from("Connection closed by peer"));
+        }
+
+        // The `read_line` retains separator characters such as CR or LF at the end, which should be trimmed.
+        let s = buf.trim_end();
+
+        // If an empty line is received.
+        if s.is_empty() {
+            // And it is the first line of the current context, ignore it and continue reading the next line.
+            // otherwise, finish reading and return read lines.
+            if lines.is_empty() {
+                continue;
+            } else {
+                break;
             }
         }
+
+        // Now, it is not an empty line, create a copiable String and record it into `lines`.
+        lines.push(String::from(s));
     }
     Ok(lines)
 }

@@ -12,7 +12,6 @@ async fn wait_until_http_proxy_connect(
     stream: &NeckStream,
 ) -> Result<HttpRequestBasic, Box<dyn Error>> {
     let req: HttpRequestBasic = stream.read_http_request().await?;
-    println!("req = {:#?}", req);
     if req.get_method().eq("CONNECT") {
         Ok(req)
     } else {

@@ -9,6 +9,12 @@ impl NeckError {
     pub fn new(message: String) -> NeckError {
         NeckError { message }
     }
+
+    pub fn from(message: &str) -> Box<NeckError> {
+        Box::new(NeckError {
+            message: String::from(message),
+        })
+    }
 }
 
 impl Display for NeckError {

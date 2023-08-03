@@ -25,7 +25,7 @@ enum Commands {
     Join {
         /// Proxy server address
         addr: String,
-        /// Provided connections, default 16
+        /// Provided connections, defaults 100
         #[arg(short, long)]
         connections: Option<u16>,
     },
@@ -46,7 +46,7 @@ async fn main() {
         }
         Commands::Join { addr, connections } => {
             // Start client
-            client::start(addr, connections.unwrap_or(16)).await
+            client::start(addr, connections.unwrap_or(100)).await
         }
     }
 }

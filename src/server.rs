@@ -3,99 +3,57 @@ use std::{error::Error, sync::Arc};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
-    http::{HttpCommonBasic, HttpRequest, HttpRequestBasic, HttpResponse},
+    http::{HttpCommonBasic, HttpRequest, HttpRequestBasic},
     neck::NeckStream,
-    pool::{Keeper, Pool},
-    utils::NeckError,
+    pool::{Pool, ProxyResult},
 };
-
-async fn create_proxy_connection(
-    stream: &NeckStream,
-    req: &HttpRequestBasic,
-    pool: &Arc<Pool>,
-) -> Result<Arc<Keeper>, Box<dyn Error>> {
-    // This is a retry loop, where certain operations can be retried, with a maximum of 5 retry attempts.
-    for _ in 1..=5 {
-        // Take a Keeper from pool without retry.
-        // If the pool is empty, retrying is pointless.
-        let keeper = match pool.take().await {
-            Some(k) => k,
-            None => {
-                break;
-            }
-        };
-
-        // Send the PROXY request to upstream.
-        keeper
-            .stream
-            .write(req.to_string())
-            .await
-            .map_err(|e| e.to_string())?;
-
-        {
-            // Read the first response from upstream.
-            // This operation can be retryed.
-            let first_response = keeper.first_response.lock().await;
-            let res = match first_response.as_ref() {
-                Ok(res) => res,
-                Err(_) => {
-                    continue;
-                }
-            };
-
-            // Got a non-200 status, this means proxy server cannot process this request, retrying is pointless.
-            if res.get_status() != 200 {
-                stream
-                    .respond(503, res.get_text(), req.get_version(), res.get_payload())
-                    .await?;
-                stream.shutdown().await?;
-                let message = format!(
-                    "[{}] Faild to create connection with {} from {}",
-                    stream.peer_addr().to_string(),
-                    req.get_uri(),
-                    keeper.stream.peer_addr().to_string(),
-                );
-                println!("{}", message);
-                return Err(Box::new(NeckError::new(message)));
-            }
-        }
-
-        println!(
-            "[{}] Connect to {} host {}",
-            stream.peer_addr().to_string(),
-            keeper.stream.peer_addr().to_string(),
-            req.get_uri()
-        );
-        return Ok(keeper);
-    }
-    stream
-        .respond(
-            502,
-            "Bad Gateway",
-            req.get_version(),
-            "Connections are not available\n",
-        )
-        .await?;
-    stream.shutdown().await?;
-    let message = format!(
-        "[{}] Connections are not available for host {}",
-        stream.peer_addr().to_string(),
-        req.get_uri()
-    );
-    println!("{}", message);
-    Err(Box::new(NeckError::new(message)))
-}
 
 async fn connect_handler(
     stream: NeckStream,
     req: &HttpRequestBasic,
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
-    let keeper = create_proxy_connection(&stream, req, &pool).await?;
-    stream
-        .respond(200, "Connection Established", req.get_version(), "")
-        .await?;
-    stream.weld(&keeper.stream).await;
+    match pool.connect(req.get_uri()).await {
+        ProxyResult::Ok(keeper) => {
+            println!(
+                "[{}] Connect to {} for {}",
+                stream.peer_addr().to_string(),
+                keeper.stream.peer_addr().to_string(),
+                req.get_uri()
+            );
+            stream
+                .respond(200, "Connection Established", req.get_version(), "")
+                .await?;
+            stream.weld(&keeper.stream).await;
+        }
+        ProxyResult::BadGateway() => {
+            println!(
+                "[{}] No available connections for {}",
+                stream.peer_addr().to_string(),
+                req.get_uri()
+            );
+            stream
+                .respond(
+                    502,
+                    "Bad Gateway",
+                    req.get_version(),
+                    "Connections are not available\n",
+                )
+                .await?;
+            stream.shutdown().await?;
+        }
+        ProxyResult::ServiceUnavailable(msg) => {
+            println!(
+                "[{}] Failed to connect {}",
+                stream.peer_addr().to_string(),
+                req.get_uri()
+            );
+            stream
+                .respond(503, "Service Unavailable", req.get_version(), &msg)
+                .await?;
+            stream.shutdown().await?;
+        }
+    }
     Ok(())
 }
 
@@ -148,15 +106,53 @@ async fn simple_http_proxy_handler(
             host.push_str(":80");
         }
 
-        let c_req = HttpRequestBasic::new("CONNECT", &host, "HTTP/1.1", vec![]);
-        let keeper = create_proxy_connection(&stream, &c_req, &pool).await?;
-
-        let mut headers = req.get_headers().clone();
-        headers.remove("Proxy-Connection");
-        let b_req = HttpRequestBasic::new(req.get_method(), path, req.get_version(), headers);
-        keeper.stream.write(b_req.to_string()).await?;
-
-        stream.weld(&keeper.stream).await;
+        match pool.connect(&host).await {
+            ProxyResult::Ok(keeper) => {
+                println!(
+                    "[{}] Connect to {} for http://{}",
+                    stream.peer_addr().to_string(),
+                    keeper.stream.peer_addr().to_string(),
+                    host
+                );
+                let mut headers = req.get_headers().clone();
+                headers.remove("Proxy-Connection");
+                keeper
+                    .stream
+                    .write(
+                        HttpRequestBasic::new(req.get_method(), path, req.get_version(), headers)
+                            .to_string(),
+                    )
+                    .await?;
+                stream.weld(&keeper.stream).await;
+            }
+            ProxyResult::BadGateway() => {
+                println!(
+                    "[{}] No available connections for http://{}",
+                    stream.peer_addr().to_string(),
+                    host
+                );
+                stream
+                    .respond(
+                        502,
+                        "Bad Gateway",
+                        req.get_version(),
+                        "Connections are not available\n",
+                    )
+                    .await?;
+                stream.shutdown().await?;
+            }
+            ProxyResult::ServiceUnavailable(msg) => {
+                println!(
+                    "[{}] Failed to connect http://{}",
+                    stream.peer_addr().to_string(),
+                    host
+                );
+                stream
+                    .respond(503, "Service Unavailable", req.get_version(), &msg)
+                    .await?;
+                stream.shutdown().await?;
+            }
+        }
     } else {
         stream
             .respond(400, "Bad Request", req.get_version(), "Bad URI")
@@ -179,28 +175,38 @@ async fn reject_handler(stream: NeckStream, req: &HttpRequestBasic) -> Result<()
 
 async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) -> Result<(), String> {
     let stream = NeckStream::new(tcp_stream);
+
+    // Read the first request.
     let req = stream
         .read_http_request()
         .await
         .map_err(|e| e.to_string())?;
+
+    // Dispatch to different handlers.
     match req.get_method().as_str() {
         "CONNECT" => connect_handler(stream, &req, pool).await,
         "JOIN" => join_handler(stream, &req, pool).await,
         _ => {
-            // It's a simple HTTP proxy request.
+            // It is a simple HTTP proxy request.
             if req.get_uri().starts_with("http://") {
                 simple_http_proxy_handler(stream, &req, pool).await
-            } else if req.get_method().eq("GET") {
+            }
+            // It is a plan GET request.
+            else if req.get_method().eq("GET") {
                 get_handler(stream, &req, pool).await
-            } else {
+            }
+            // Reject others.
+            else {
                 reject_handler(stream, &req).await
             }
         }
     }
     .map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
+/// Start a neck server.
 pub async fn start(addr: String) {
     let shared_pool = Arc::new(Pool::new());
 

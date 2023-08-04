@@ -39,9 +39,8 @@ async fn connect_handler(
                 stream
                     .respond(200, "Connection Established", req.get_version(), "")
                     .await?;
-
                 println!(
-                    "{} -> {}: CONNECT {}",
+                    "[{}] Connect to {} host {}",
                     stream.peer_addr().to_string(),
                     keeper.stream.peer_addr().to_string(),
                     req.get_uri()
@@ -52,6 +51,12 @@ async fn connect_handler(
                     .respond(503, res.get_text(), req.get_version(), res.get_payload())
                     .await?;
                 stream.shutdown().await?;
+                println!(
+                    "[{}] Faild to create connection with {} from {}",
+                    stream.peer_addr().to_string(),
+                    req.get_uri(),
+                    keeper.stream.peer_addr().to_string(),
+                );
             }
             break 'end;
         }
@@ -64,6 +69,11 @@ async fn connect_handler(
             )
             .await?;
         stream.shutdown().await?;
+        println!(
+            "[{}] Connections are not available for host {}",
+            stream.peer_addr().to_string(),
+            req.get_uri()
+        );
     }
     Ok(())
 }
@@ -115,17 +125,20 @@ async fn reject_handler(stream: NeckStream, req: &HttpRequestBasic) -> Result<()
 
 async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) {
     let stream = NeckStream::new(tcp_stream);
-    let req = stream.read_http_request().await.unwrap();
-    let res = match req.get_method().as_str() {
-        "CONNECT" => connect_handler(stream, &req, pool).await,
-        "JOIN" => join_handler(stream, &req, pool).await,
-        "GET" => get_handler(stream, &req, pool).await,
-        _ => reject_handler(stream, &req).await,
-    };
-    match res {
-        Ok(_) => (),
-        Err(e) => {
-            eprintln!("{:#}", e);
+    let first_request = stream.read_http_request().await.map_err(|e| e.to_string());
+    let peer_addr = stream.peer_addr().to_string();
+    if let Ok(req) = first_request {
+        let res = match req.get_method().as_str() {
+            "CONNECT" => connect_handler(stream, &req, pool).await,
+            "JOIN" => join_handler(stream, &req, pool).await,
+            "GET" => get_handler(stream, &req, pool).await,
+            _ => reject_handler(stream, &req).await,
+        };
+        match res {
+            Ok(_) => (),
+            Err(e) => {
+                eprintln!("[{}] {}", peer_addr, e.to_string());
+            }
         }
     }
 }

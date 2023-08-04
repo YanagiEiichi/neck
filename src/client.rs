@@ -47,14 +47,13 @@ async fn connect_and_join(addr: &str) -> Result<NeckStream, Box<dyn Error>> {
 
 async fn setup_connection(addr: &str) -> Result<(), Box<dyn Error>> {
     let stream = connect_and_join(addr).await?;
-    println!("Connection {} ready", stream.local_addr());
     let req = wait_until_http_proxy_connect(&stream).await?;
     match TcpStream::connect(req.get_uri().as_str()).await {
         Ok(upstream) => {
             stream
                 .respond(200, "Connection Established", req.get_version(), "")
                 .await?;
-            println!("Connect to {} for {}", req.get_uri(), stream.local_addr());
+            println!("[{}] Connect to {}", stream.local_addr(), req.get_uri());
             stream.weld(&NeckStream::new(upstream)).await;
             Ok(())
         }
@@ -67,6 +66,11 @@ async fn setup_connection(addr: &str) -> Result<(), Box<dyn Error>> {
                     (e.to_string() + "\n").as_str(),
                 )
                 .await?;
+            println!(
+                "[{}] Faild to connect {}",
+                stream.local_addr(),
+                req.get_uri()
+            );
             Err(Box::new(NeckError::new(format!(
                 "Failed to connect {}",
                 req.get_uri()
@@ -82,8 +86,7 @@ async fn start_worker(addr: String) {
             Ok(_) => {
                 fails = 0;
             }
-            Err(e) => {
-                eprintln!("{}", e);
+            Err(_e) => {
                 fails = fails.add(1).min(6);
             }
         };

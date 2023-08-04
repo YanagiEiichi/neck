@@ -28,29 +28,35 @@ impl NeckStream {
         NeckStream { pa, la, w, r }
     }
 
+    /// Borrow local addr.
     pub fn local_addr(&self) -> &SocketAddr {
         &self.la
     }
 
+    /// Borrow peer addr.
     pub fn peer_addr(&self) -> &SocketAddr {
         &self.pa
     }
 
+    /// Read an HTTP request (wait for an HTTP request to be received completely).
     pub async fn read_http_request(&self) -> Result<HttpRequestBasic, Box<dyn Error>> {
         let mut reader = self.r.lock().await;
         HttpRequestBasic::read_from(&mut reader).await
     }
 
+    /// Read an HTTP response (wait for an HTTP response to be received completely).
     pub async fn read_http_response(&self) -> Result<HttpResponseBasic, Box<dyn Error>> {
         let mut reader = self.r.lock().await;
         HttpResponseBasic::read_from(&mut reader).await
     }
 
+    /// Write a string to writter.
     pub async fn write(&self, data: String) -> Result<usize, std::io::Error> {
         let mut writer = self.w.lock().await;
         writer.write(data.as_bytes()).await
     }
 
+    /// Send an HTTP response.
     pub async fn respond(
         &self,
         status: u16,
@@ -75,22 +81,22 @@ impl NeckStream {
         writer.write(res.as_bytes()).await
     }
 
+    /// Borrow the write and read half streams.
     pub fn split(&self) -> (&Mutex<BufReader<OwnedReadHalf>>, &Mutex<OwnedWriteHalf>) {
         (&self.r, &self.w)
     }
 
+    /// Weld with another NeckStream (Start a bidirectional stream copy).
+    /// After welding, do not use these streams elsewhere because both streams will be fully consumed.
     pub async fn weld(&self, upstream: &Self) {
+        // Split and lock all half streams.
         let (mar, maw) = self.split();
         let (mbr, mbw) = upstream.split();
-
         let (mut ar, mut aw, mut br, mut bw) =
             tokio::join!(mar.lock(), maw.lock(), mbr.lock(), mbw.lock());
-
+        // Weld them together.
         let t1 = io::copy(&mut *ar, &mut *bw);
         let t2 = io::copy(&mut *br, &mut *aw);
-        tokio::select! {
-          _ = t1 => {}
-          _ = t2 => {}
-        };
+        let (_r1, _r2) = tokio::join!(t1, t2);
     }
 }

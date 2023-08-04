@@ -6,6 +6,7 @@ use tokio::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
         TcpStream,
     },
+    select,
     sync::Mutex,
 };
 
@@ -94,9 +95,22 @@ impl NeckStream {
         let (mbr, mbw) = upstream.split();
         let (mut ar, mut aw, mut br, mut bw) =
             tokio::join!(mar.lock(), maw.lock(), mbr.lock(), mbw.lock());
+
         // Weld them together.
         let t1 = io::copy(&mut *ar, &mut *bw);
         let t2 = io::copy(&mut *br, &mut *aw);
-        let (_r1, _r2) = tokio::join!(t1, t2);
+
+        // Use `select!` rather than `join!` here. Because the `join!` waits for both copying tasks to complete,
+        // but an HTTP client may still be in the half-closing, which will hang the connection and not release it.
+        // The `select!` indicates that either or the task completes. Therefore, both stream will be Drop and released.
+        select! {
+          _ = t1 => (),
+          _ = t2 => ()
+        }
+    }
+
+    /// Shutdown the connection immediately.
+    pub async fn shutdown(&self) -> Result<(), io::Error> {
+        self.w.lock().await.shutdown().await
     }
 }

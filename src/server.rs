@@ -51,6 +51,7 @@ async fn connect_handler(
                 stream
                     .respond(503, res.get_text(), req.get_version(), res.get_payload())
                     .await?;
+                stream.shutdown().await?;
             }
             break 'end;
         }
@@ -62,6 +63,7 @@ async fn connect_handler(
                 "Connections are not available\n",
             )
             .await?;
+        stream.shutdown().await?;
     }
     Ok(())
 }

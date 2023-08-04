@@ -32,7 +32,7 @@ async fn wait_until_http_proxy_connect(
 
 async fn connect_and_join(addr: &str) -> Result<NeckStream, Box<dyn Error>> {
     let stream = NeckStream::new(TcpStream::connect(addr).await?);
-    let req = HttpRequestBasic::new("JOIN", "*", "HTTP/1.1");
+    let req = HttpRequestBasic::new("JOIN", "*", "HTTP/1.1", vec![]);
     stream.write(req.to_string()).await?;
     let res = stream.read_http_response().await?;
     if res.get_status() == 200 {

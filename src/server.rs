@@ -69,23 +69,21 @@ async fn join_handler(
     Ok(())
 }
 
-async fn get_handler(
+async fn api_handler(
     stream: NeckStream,
     req: &HttpRequestBasic,
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
-    match req.get_uri().as_str() {
-        "/pool/len" => {
-            let payload = pool.len().await.to_string() + "\n";
-            stream
-                .respond(200, "OK", req.get_version(), &payload)
-                .await?;
-        }
-        _ => {
-            stream
-                .respond(404, "Not Found", req.get_version(), "Not Found\n")
-                .await?;
-        }
+    let uri = req.get_uri();
+    if uri.eq("/pool/len") && req.get_method().eq("GET") {
+        let payload = pool.len().await.to_string() + "\n";
+        stream
+            .respond(200, "OK", req.get_version(), &payload)
+            .await?;
+    } else {
+        stream
+            .respond(404, "Not Found", req.get_version(), "Not Found\n")
+            .await?;
     }
     Ok(())
 }
@@ -161,18 +159,6 @@ async fn simple_http_proxy_handler(
     Ok(())
 }
 
-async fn reject_handler(stream: NeckStream, req: &HttpRequestBasic) -> Result<(), Box<dyn Error>> {
-    stream
-        .respond(
-            405,
-            "Method Not Allowed",
-            req.get_version(),
-            format!("Method '{}' not allowed\n", req.get_method()).as_str(),
-        )
-        .await?;
-    Ok(())
-}
-
 async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) -> Result<(), String> {
     let stream = NeckStream::new(tcp_stream);
 
@@ -191,13 +177,9 @@ async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) -> Result<(), String> 
             if req.get_uri().starts_with("http://") {
                 simple_http_proxy_handler(stream, &req, pool).await
             }
-            // It is a plan GET request.
-            else if req.get_method().eq("GET") {
-                get_handler(stream, &req, pool).await
-            }
-            // Reject others.
+            // Others.
             else {
-                reject_handler(stream, &req).await
+                api_handler(stream, &req, pool).await
             }
         }
     }

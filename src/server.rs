@@ -14,22 +14,22 @@ async fn connect_handler(
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
     match pool.connect(req.get_uri()).await {
-        ProxyResult::Ok(keeper) => {
+        ProxyResult::Ok(upstream) => {
             println!(
                 "[{}] Connect to {} for {}",
-                stream.peer_addr().to_string(),
-                keeper.stream.peer_addr().to_string(),
+                stream.peer_addr.to_string(),
+                upstream.peer_addr.to_string(),
                 req.get_uri()
             );
             stream
                 .respond(200, "Connection Established", req.get_version(), "")
                 .await?;
-            stream.weld(&keeper.stream).await;
+            stream.weld(&upstream).await;
         }
         ProxyResult::BadGateway() => {
             println!(
                 "[{}] No available connections for {}",
-                stream.peer_addr().to_string(),
+                stream.peer_addr.to_string(),
                 req.get_uri()
             );
             stream
@@ -45,7 +45,7 @@ async fn connect_handler(
         ProxyResult::ServiceUnavailable(msg) => {
             println!(
                 "[{}] Failed to connect {}",
-                stream.peer_addr().to_string(),
+                stream.peer_addr.to_string(),
                 req.get_uri()
             );
             stream
@@ -105,28 +105,27 @@ async fn simple_http_proxy_handler(
         }
 
         match pool.connect(&host).await {
-            ProxyResult::Ok(keeper) => {
+            ProxyResult::Ok(upstream) => {
                 println!(
                     "[{}] Connect to {} for http://{}",
-                    stream.peer_addr().to_string(),
-                    keeper.stream.peer_addr().to_string(),
+                    stream.peer_addr.to_string(),
+                    upstream.peer_addr.to_string(),
                     host
                 );
                 let mut headers = req.get_headers().clone();
                 headers.remove("Proxy-Connection");
-                keeper
-                    .stream
+                upstream
                     .write(
                         HttpRequestBasic::new(req.get_method(), path, req.get_version(), headers)
                             .to_string(),
                     )
                     .await?;
-                stream.weld(&keeper.stream).await;
+                stream.weld(&upstream).await;
             }
             ProxyResult::BadGateway() => {
                 println!(
                     "[{}] No available connections for http://{}",
-                    stream.peer_addr().to_string(),
+                    stream.peer_addr.to_string(),
                     host
                 );
                 stream
@@ -142,7 +141,7 @@ async fn simple_http_proxy_handler(
             ProxyResult::ServiceUnavailable(msg) => {
                 println!(
                     "[{}] Failed to connect http://{}",
-                    stream.peer_addr().to_string(),
+                    stream.peer_addr.to_string(),
                     host
                 );
                 stream

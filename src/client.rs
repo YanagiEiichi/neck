@@ -53,7 +53,7 @@ async fn setup_connection(addr: &str) -> Result<(), Box<dyn Error>> {
             stream
                 .respond(200, "Connection Established", req.get_version(), "")
                 .await?;
-            println!("[{}] Connect to {}", stream.local_addr(), req.get_uri());
+            println!("[{}] Connect to {}", stream.local_addr, req.get_uri());
             stream.weld(&NeckStream::new(upstream)).await;
             Ok(())
         }
@@ -66,11 +66,7 @@ async fn setup_connection(addr: &str) -> Result<(), Box<dyn Error>> {
                     (e.to_string() + "\n").as_str(),
                 )
                 .await?;
-            println!(
-                "[{}] Faild to connect {}",
-                stream.local_addr(),
-                req.get_uri()
-            );
+            println!("[{}] Faild to connect {}", stream.local_addr, req.get_uri());
             Err(Box::new(NeckError::new(format!(
                 "Failed to connect {}",
                 req.get_uri()

@@ -4,8 +4,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
 
 use tokio::io::BufReader;
 
-use crate::utils::NeckError;
-
+use super::error::HttpError;
 use super::Headers;
 
 /// Read a group of lines ending with an empty line from a BufReader.
@@ -22,7 +21,7 @@ where
 
         // Normally, the `read` method will wait for any bytes received, so zero bytes read indicate an EOF received.
         if stream.read_line(&mut buf).await? == 0 {
-            return Err(NeckError::from("Connection closed by peer"));
+            return HttpError::wrap("Connection closed by peer");
         }
 
         // The `read_line` retains separator characters such as CR or LF at the end, which should be trimmed.
@@ -82,7 +81,7 @@ pub trait HttpCommon {
 pub struct FirstLine(pub String, pub String, pub String);
 
 impl FirstLine {
-    fn new(raw: String) -> Result<Self, impl Error> {
+    fn new(raw: String) -> Result<Self, Box<dyn Error>> {
         if let Some((first, rest)) = raw.split_once(' ') {
             if let Some((second, third)) = rest.split_once(' ') {
                 return Ok(FirstLine(
@@ -92,7 +91,7 @@ impl FirstLine {
                 ));
             }
         }
-        Err(NeckError::from("Bad HTTP protocol"))
+        HttpError::wrap("Bad HTTP protocol")
     }
     fn write_bytes(&self, u: &mut Vec<u8>) {
         u.extend(self.0.as_bytes());

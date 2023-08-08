@@ -10,7 +10,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::http::{Headers, HttpCommon, HttpProtocol, HttpRequest, HttpResponse};
+use crate::http::{FirstLine, Headers, HttpProtocol, HttpRequest, HttpResponse};
 
 pub struct NeckStream {
     pub peer_addr: SocketAddr,
@@ -59,21 +59,21 @@ impl NeckStream {
         text: &str,
         version: &str,
         payload: &str,
-    ) -> Result<usize, std::io::Error> {
+    ) -> Result<(), Box<dyn Error>> {
         let mut headers = Vec::new();
         headers.push(String::from("Content-Type: text/plain"));
         headers.push(format!("Content-Length: {}", payload.as_bytes().len()));
-        let res = HttpProtocol::new(
-            crate::http::FirstLine(
+        HttpProtocol::new(
+            FirstLine(
                 String::from(version),
                 status.to_string(),
                 String::from(text),
             ),
             headers,
             payload.as_bytes().to_vec(),
-        );
-        let mut writer = self.writer.lock().await;
-        writer.write(&res.to_bytes()).await
+        )
+        .write_to(&mut *self.writer.lock().await)
+        .await
     }
 
     /// Send an HTTP request.
@@ -83,14 +83,14 @@ impl NeckStream {
         uri: impl ToString,
         version: impl ToString,
         headers: impl Into<Headers>,
-    ) -> Result<usize, io::Error> {
-        let res = HttpProtocol::new(
-            crate::http::FirstLine(method.to_string(), uri.to_string(), version.to_string()),
+    ) -> Result<(), Box<dyn Error>> {
+        HttpProtocol::new(
+            FirstLine(method.to_string(), uri.to_string(), version.to_string()),
             headers,
             Vec::new(),
-        );
-        let mut writer = self.writer.lock().await;
-        writer.write(&res.to_bytes()).await
+        )
+        .write_to(&mut *self.writer.lock().await)
+        .await
     }
 
     pub async fn peek_one_byte(am_reader: Arc<Mutex<BufReader<OwnedReadHalf>>>) -> usize {

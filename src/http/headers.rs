@@ -1,3 +1,7 @@
+use std::error::Error;
+
+use tokio::io::{AsyncWrite, AsyncWriteExt};
+
 #[derive(Debug, Clone)]
 pub struct Headers(Vec<String>);
 
@@ -43,12 +47,16 @@ impl Headers {
         Some(self.0.remove(index))
     }
 
-    /// Write data into a Vec<u8>
-    pub fn write_bytes(&self, r: &mut Vec<u8>) {
+    // Write data into a Write
+    pub async fn write_to<T>(&self, w: &mut T) -> Result<(), Box<dyn Error>>
+    where
+        T: Unpin,
+        T: AsyncWrite,
+    {
         for i in &self.0 {
-            r.extend(i.as_bytes());
-            r.push(b'\r');
-            r.push(b'\n');
+            w.write_all(i.as_bytes()).await?;
+            w.write_all(b"\r\n").await?;
         }
+        Ok(())
     }
 }

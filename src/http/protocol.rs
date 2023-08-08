@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use tokio::io::BufReader;
 
@@ -70,9 +70,6 @@ pub trait HttpCommon {
     /// Get HTTP headers
     fn get_headers(&self) -> &Headers;
 
-    // Convert to HTTP protocol bytes.
-    fn to_bytes(&self) -> Vec<u8>;
-
     /// Get the payload.
     fn get_payload(&self) -> &Vec<u8>;
 }
@@ -93,14 +90,20 @@ impl FirstLine {
         }
         HttpError::wrap("Bad HTTP protocol")
     }
-    fn write_bytes(&self, u: &mut Vec<u8>) {
-        u.extend(self.0.as_bytes());
-        u.push(b' ');
-        u.extend(self.1.as_bytes());
-        u.push(b' ');
-        u.extend(self.2.as_bytes());
-        u.push(b'\r');
-        u.push(b'\n');
+
+    // Convert to HTTP protocol bytes.
+    async fn write_to<T>(&self, w: &mut T) -> Result<(), Box<dyn Error>>
+    where
+        T: Unpin,
+        T: AsyncWrite,
+    {
+        w.write_all(self.0.as_bytes()).await?;
+        w.write_all(b" ").await?;
+        w.write_all(self.1.as_bytes()).await?;
+        w.write_all(b" ").await?;
+        w.write_all(self.2.as_bytes()).await?;
+        w.write_all(b"\r\n").await?;
+        Ok(())
     }
 }
 
@@ -135,12 +138,26 @@ impl HttpProtocol {
         let first_line = FirstLine::new(lines.remove(0))?;
 
         // Create headers (The first line has remove above).
-        let headers = Headers::from(lines);
+        let headers = lines.into();
 
         // Read playload
         let payload = read_payload(stream, &headers).await?;
 
         Ok(HttpProtocol::new(first_line, headers, payload))
+    }
+
+    pub async fn write_to<T>(&self, w: &mut T) -> Result<(), Box<dyn Error>>
+    where
+        T: Unpin,
+        T: AsyncWrite,
+    {
+        self.first_line.write_to(w).await?;
+        self.headers.write_to(w).await?;
+        w.write_all(b"\r\n").await?;
+        if !self.payload.is_empty() {
+            w.write_all(&self.payload).await?;
+        }
+        Ok(())
     }
 }
 
@@ -151,17 +168,5 @@ impl HttpCommon for HttpProtocol {
 
     fn get_payload(&self) -> &Vec<u8> {
         &self.payload
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut r = Vec::<u8>::new();
-        self.first_line.write_bytes(&mut r);
-        self.headers.write_bytes(&mut r);
-        r.push(b'\r');
-        r.push(b'\n');
-        if !self.payload.is_empty() {
-            r.extend(&self.payload);
-        }
-        r
     }
 }

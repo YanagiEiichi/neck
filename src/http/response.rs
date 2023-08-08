@@ -1,12 +1,11 @@
-use std::error::Error;
+use std::{error::Error, ops::Deref};
 
 use tokio::io::{AsyncRead, BufReader};
 
-use super::{Headers, HttpCommon, HttpProtocol};
+use super::HttpProtocol;
 
-pub struct HttpResponse {
-    protocol: HttpProtocol,
-}
+#[derive(Debug)]
+pub struct HttpResponse(HttpProtocol);
 
 impl HttpResponse {
     pub async fn read_from<T>(stream: &mut BufReader<T>) -> Result<HttpResponse, Box<dyn Error>>
@@ -14,39 +13,31 @@ impl HttpResponse {
         T: Unpin,
         T: AsyncRead,
     {
-        Ok(HttpResponse {
-            protocol: HttpProtocol::read_from(stream).await?,
-        })
+        Ok(HttpResponse(HttpProtocol::read_from(stream).await?))
     }
 
     /// Returns a reference to the get version of this [`HttpResponse`].
     #[allow(dead_code)]
     pub fn get_version(&self) -> &String {
-        &self.protocol.first_line.0
+        &self.first_line.0
     }
 
     /// Returns the get status of this [`HttpResponse`].
     pub fn get_status(&self) -> u16 {
-        self.protocol.first_line.1.parse().unwrap_or_default()
+        self.first_line.1.parse().unwrap_or_default()
     }
 
     /// Returns a reference to the get text of this [`HttpResponse`].
     #[allow(dead_code)]
     pub fn get_text(&self) -> &String {
-        &self.protocol.first_line.2
+        &self.first_line.2
     }
 }
 
-impl HttpCommon for HttpResponse {
-    fn get_headers(&self) -> &Headers {
-        &self.protocol.headers
-    }
+impl Deref for HttpResponse {
+    type Target = HttpProtocol;
 
-    fn get_payload(&self) -> &Vec<u8> {
-        self.protocol.get_payload()
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        self.protocol.to_bytes()
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }

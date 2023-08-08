@@ -1,48 +1,41 @@
-use std::error::Error;
+use std::{error::Error, ops::Deref};
 
 use tokio::io::{AsyncRead, BufReader};
 
-use super::{Headers, HttpCommon, HttpProtocol};
+use super::HttpProtocol;
 
 #[derive(Debug)]
-pub struct HttpRequest {
-    protocol: HttpProtocol,
-}
+pub struct HttpRequest(HttpProtocol);
 
 impl HttpRequest {
-    pub async fn read_from<T>(mut stream: &mut BufReader<T>) -> Result<HttpRequest, Box<dyn Error>>
+    pub async fn read_from<T>(stream: &mut BufReader<T>) -> Result<HttpRequest, Box<dyn Error>>
     where
         T: Unpin,
         T: AsyncRead,
     {
-        Ok(HttpRequest {
-            protocol: HttpProtocol::read_from(&mut stream).await?,
-        })
+        Ok(HttpRequest(HttpProtocol::read_from(stream).await?))
     }
 
+    /// Returns a reference to the get method of this [`HttpRequest`].
     pub fn get_method(&self) -> &String {
-        &self.protocol.first_line.0
+        &self.first_line.0
     }
 
+    /// Returns a reference to the get uri of this [`HttpRequest`].
     pub fn get_uri(&self) -> &String {
-        &self.protocol.first_line.1
+        &self.first_line.1
     }
 
+    /// Returns a reference to the get version of this [`HttpRequest`].
     pub fn get_version(&self) -> &String {
-        &self.protocol.first_line.2
+        &self.first_line.2
     }
 }
 
-impl HttpCommon for HttpRequest {
-    fn get_headers(&self) -> &Headers {
-        &self.protocol.headers
-    }
+impl Deref for HttpRequest {
+    type Target = HttpProtocol;
 
-    fn get_payload(&self) -> &Vec<u8> {
-        self.protocol.get_payload()
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        self.protocol.to_bytes()
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }

@@ -40,4 +40,12 @@ impl Headers {
         })?;
         Some(self.0.remove(index))
     }
+
+    pub fn write_bytes(&self, r: &mut Vec<u8>) {
+        for i in &self.0 {
+            r.extend(i.as_bytes());
+            r.push(b'\r');
+            r.push(b'\n');
+        }
+    }
 }

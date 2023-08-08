@@ -3,7 +3,7 @@ use std::{error::Error, sync::Arc};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
-    http::{HttpCommonBasic, HttpRequest, HttpRequestBasic},
+    http::{HttpCommonBasic, HttpRequest},
     neck::NeckStream,
     pool::{Pool, ProxyResult},
 };
@@ -11,7 +11,7 @@ use crate::{
 /// Process an HTTPS proxy request.
 async fn connect_handler(
     stream: NeckStream,
-    req: &HttpRequestBasic,
+    req: &HttpRequest,
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
     match pool.connect(req.get_uri()).await {
@@ -60,7 +60,7 @@ async fn connect_handler(
 
 async fn join_handler(
     stream: NeckStream,
-    req: &HttpRequestBasic,
+    req: &HttpRequest,
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
     stream
@@ -72,7 +72,7 @@ async fn join_handler(
 
 async fn api_handler(
     stream: NeckStream,
-    req: &HttpRequestBasic,
+    req: &HttpRequest,
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
     let uri = req.get_uri();
@@ -91,7 +91,7 @@ async fn api_handler(
 
 async fn simple_http_proxy_handler(
     stream: NeckStream,
-    req: &HttpRequestBasic,
+    req: &HttpRequest,
     pool: Arc<Pool>,
 ) -> Result<(), Box<dyn Error>> {
     // Remove "http://" from left
@@ -117,8 +117,8 @@ async fn simple_http_proxy_handler(
                 headers.remove("Proxy-Connection");
                 upstream
                     .write(
-                        HttpRequestBasic::new(req.get_method(), path, req.get_version(), headers)
-                            .to_string(),
+                        &HttpRequest::new(req.get_method(), path, req.get_version(), headers)
+                            .to_bytes(),
                     )
                     .await?;
                 stream.weld(&upstream).await;

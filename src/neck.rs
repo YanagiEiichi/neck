@@ -10,7 +10,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::http::{HttpProtocol, HttpRequestBasic, HttpResponseBasic};
+use crate::http::{HttpCommonBasic, HttpProtocol, HttpRequest, HttpResponse};
 
 pub struct NeckStream {
     pub peer_addr: SocketAddr,
@@ -41,21 +41,21 @@ impl NeckStream {
     }
 
     /// Read an HTTP request (wait for an HTTP request to be received completely).
-    pub async fn read_http_request(&self) -> Result<HttpRequestBasic, Box<dyn Error>> {
+    pub async fn read_http_request(&self) -> Result<HttpRequest, Box<dyn Error>> {
         let mut reader = self.reader.lock().await;
-        HttpRequestBasic::read_from(&mut reader).await
+        HttpRequest::read_from(&mut reader).await
     }
 
     /// Read an HTTP response (wait for an HTTP response to be received completely).
-    pub async fn read_http_response(&self) -> Result<HttpResponseBasic, Box<dyn Error>> {
+    pub async fn read_http_response(&self) -> Result<HttpResponse, Box<dyn Error>> {
         let mut reader = self.reader.lock().await;
-        HttpResponseBasic::read_from(&mut reader).await
+        HttpResponse::read_from(&mut reader).await
     }
 
     /// Write a string to writter.
-    pub async fn write(&self, data: String) -> Result<usize, std::io::Error> {
+    pub async fn write(&self, data: &Vec<u8>) -> Result<usize, std::io::Error> {
         let mut writer = self.writer.lock().await;
-        writer.write(data.as_bytes()).await
+        writer.write(data).await
     }
 
     /// Send an HTTP response.
@@ -70,17 +70,16 @@ impl NeckStream {
         headers.push(String::from("Content-Type: text/plain"));
         headers.push(format!("Content-Length: {}", payload.as_bytes().len()));
         let res = HttpProtocol::new(
-            (
+            crate::http::FirstLine(
                 String::from(version),
                 status.to_string(),
                 String::from(text),
             ),
             headers,
-        )
-        .to_string()
-            + payload;
+            payload.as_bytes().to_vec(),
+        );
         let mut writer = self.writer.lock().await;
-        writer.write(res.as_bytes()).await
+        writer.write(&res.to_bytes()).await
     }
 
     pub async fn peek_one_byte(am_reader: Arc<Mutex<BufReader<OwnedReadHalf>>>) -> usize {

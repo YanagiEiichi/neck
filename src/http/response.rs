@@ -4,61 +4,49 @@ use tokio::io::{AsyncRead, BufReader};
 
 use super::{Headers, HttpCommonBasic, HttpProtocol};
 
-pub trait HttpResponse {
-    fn get_version(&self) -> &String;
-    fn get_raw_status(&self) -> &String;
-    fn get_status(&self) -> u16;
-    fn get_text(&self) -> &String;
-}
-
-impl HttpCommonBasic for HttpResponseBasic {
-    fn get_headers(&self) -> &Headers {
-        &self.protocol.headers
-    }
-
-    fn get_payload(&self) -> &String {
-        &self.protocol.payload
-    }
-}
-
-pub struct HttpResponseBasic {
+pub struct HttpResponse {
     protocol: HttpProtocol,
 }
 
-impl HttpResponseBasic {
-    pub async fn read_from<T>(
-        stream: &mut BufReader<T>,
-    ) -> Result<HttpResponseBasic, Box<dyn Error>>
+impl HttpResponse {
+    pub async fn read_from<T>(stream: &mut BufReader<T>) -> Result<HttpResponse, Box<dyn Error>>
     where
         T: Unpin,
         T: AsyncRead,
     {
-        let protocol = HttpProtocol::read_from(stream).await?;
-
-        Ok(HttpResponseBasic { protocol })
+        Ok(HttpResponse {
+            protocol: HttpProtocol::read_from(stream).await?,
+        })
     }
-}
 
-impl HttpResponse for HttpResponseBasic {
-    fn get_version(&self) -> &String {
+    /// Returns a reference to the get version of this [`HttpResponse`].
+    #[allow(dead_code)]
+    pub fn get_version(&self) -> &String {
         &self.protocol.first_line.0
     }
 
-    fn get_raw_status(&self) -> &String {
-        &self.protocol.first_line.1
-    }
-
-    fn get_status(&self) -> u16 {
+    /// Returns the get status of this [`HttpResponse`].
+    pub fn get_status(&self) -> u16 {
         self.protocol.first_line.1.parse().unwrap_or_default()
     }
 
-    fn get_text(&self) -> &String {
+    /// Returns a reference to the get text of this [`HttpResponse`].
+    #[allow(dead_code)]
+    pub fn get_text(&self) -> &String {
         &self.protocol.first_line.2
     }
 }
 
-impl ToString for HttpResponseBasic {
-    fn to_string(&self) -> String {
-        self.protocol.to_string()
+impl HttpCommonBasic for HttpResponse {
+    fn get_headers(&self) -> &Headers {
+        &self.protocol.headers
+    }
+
+    fn get_payload(&self) -> &Vec<u8> {
+        self.protocol.get_payload()
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        self.protocol.to_bytes()
     }
 }

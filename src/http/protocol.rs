@@ -45,90 +45,118 @@ where
     Ok(lines)
 }
 
-pub trait HttpCommonBasic {
-    fn get_headers(&self) -> &Headers;
-    fn get_payload(&self) -> &String;
+// Read payload as a Vec<u8>.
+async fn read_payload<T>(
+    stream: &mut BufReader<T>,
+    headers: &Headers,
+) -> Result<Vec<u8>, Box<dyn Error>>
+where
+    T: Unpin,
+    T: AsyncRead,
+{
+    let mut buf = Vec::<u8>::new();
+    // Get the Content-Length field.
+    if let Some(value) = headers.get_header("Content-Length") {
+        // Parse it into a integer.
+        let len = value.parse::<u64>()?;
+        if len > 0 {
+            // Read bytes.
+            stream.take(len).read_to_end(&mut buf).await?;
+        }
+    }
+    Ok(buf)
 }
 
-pub type FirstLine = (String, String, String);
+pub trait HttpCommonBasic {
+    fn get_headers(&self) -> &Headers;
+    fn to_bytes(&self) -> Vec<u8>;
+    fn get_payload(&self) -> &Vec<u8>;
+}
+
+#[derive(Debug)]
+pub struct FirstLine(pub String, pub String, pub String);
+
+impl FirstLine {
+    fn new(raw: String) -> Result<Self, impl Error> {
+        if let Some((first, rest)) = raw.split_once(' ') {
+            if let Some((second, third)) = rest.split_once(' ') {
+                return Ok(FirstLine(
+                    String::from(first),
+                    String::from(second),
+                    String::from(third),
+                ));
+            }
+        }
+        Err(NeckError::from("Bad HTTP protocol"))
+    }
+    fn write_bytes(&self, u: &mut Vec<u8>) {
+        u.extend(self.0.as_bytes());
+        u.push(b' ');
+        u.extend(self.1.as_bytes());
+        u.push(b' ');
+        u.extend(self.2.as_bytes());
+        u.push(b'\r');
+        u.push(b'\n');
+    }
+}
 
 #[derive(Debug)]
 pub struct HttpProtocol {
     pub first_line: FirstLine,
     pub headers: Headers,
-    pub payload: String,
+    pub payload: Vec<u8>,
 }
 
 impl HttpProtocol {
-    pub fn new(first_line: FirstLine, headers: impl Into<Headers>) -> HttpProtocol {
+    pub fn new(
+        first_line: FirstLine,
+        headers: impl Into<Headers>,
+        payload: Vec<u8>,
+    ) -> HttpProtocol {
         HttpProtocol {
             first_line,
             headers: headers.into(),
-            payload: String::from(""),
+            payload,
         }
     }
-    pub async fn read_from<T: AsyncRead>(
-        stream: &mut BufReader<T>,
-    ) -> Result<HttpProtocol, Box<dyn Error>>
-    where
-        T: Unpin,
-    {
-        let lines = read_lines(stream).await?;
-        let mut parts = lines[0].trim().splitn(3, ' ');
-        let mut hp = HttpProtocol::new(
-            (
-                String::from(parts.next().unwrap_or("")),
-                String::from(parts.next().unwrap_or("")),
-                String::from(parts.next().unwrap_or("")),
-            ),
-            lines[1..].to_vec(),
-        );
-        hp.payload = hp.read_payload(stream).await?;
-        Ok(hp)
-    }
-
-    async fn read_payload<T>(&self, stream: &mut BufReader<T>) -> Result<String, Box<dyn Error>>
+    pub async fn read_from<T>(stream: &mut BufReader<T>) -> Result<HttpProtocol, Box<dyn Error>>
     where
         T: Unpin,
         T: AsyncRead,
     {
-        'a: {
-            if let Some(value) = self.headers.get_header("Content-Length") {
-                let len = value.parse::<u64>()?;
-                if len == 0 {
-                    break 'a;
-                }
-                let mut buf = String::new();
-                match stream.take(len).read_to_string(&mut buf).await {
-                    Ok(_) => {
-                        return Ok(buf);
-                    }
-                    Err(e) => {
-                        return Err(Box::new(e));
-                    }
-                }
-            }
-        }
-        Ok(String::from(""))
+        // Read HTTP header lines.
+        let mut lines = read_lines(stream).await?;
+
+        // Split first line as an iterator.
+        let first_line = FirstLine::new(lines.remove(0))?;
+
+        // Create headers (The first line has remove above).
+        let headers = Headers::from(lines);
+
+        // Read playload
+        let payload = read_payload(stream, &headers).await?;
+
+        Ok(HttpProtocol::new(first_line, headers, payload))
     }
 }
 
-impl ToString for HttpProtocol {
-    fn to_string(&self) -> String {
-        let mut r = String::new();
-        r.push_str(&self.first_line.0);
-        r.push(' ');
-        r.push_str(&self.first_line.1);
-        r.push(' ');
-        r.push_str(&self.first_line.2);
-        r.push_str("\r\n");
-        for i in self.headers.clone() {
-            r.push_str(&i);
-            r.push_str("\r\n");
-        }
-        r.push_str("\r\n");
+impl HttpCommonBasic for HttpProtocol {
+    fn get_headers(&self) -> &Headers {
+        &self.headers
+    }
+
+    fn get_payload(&self) -> &Vec<u8> {
+        &self.payload
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut r = Vec::<u8>::new();
+        self.first_line.write_bytes(&mut r);
+        self.headers.write_bytes(&mut r);
+        r.push(b'\r');
+        r.push(b'\n');
         if !self.payload.is_empty() {
-            r.push_str(&self.payload);
+            r.extend(&self.payload);
         }
         r
     }

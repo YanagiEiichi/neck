@@ -3,15 +3,13 @@ use std::{error::Error, ops::Add, time::Duration};
 use tokio::{net::TcpStream, time};
 
 use crate::{
-    http::{HttpRequest, HttpRequestBasic, HttpResponse},
+    http::{HttpCommonBasic, HttpRequest},
     neck::NeckStream,
     utils::NeckError,
 };
 
-async fn wait_until_http_proxy_connect(
-    stream: &NeckStream,
-) -> Result<HttpRequestBasic, Box<dyn Error>> {
-    let req: HttpRequestBasic = stream.read_http_request().await?;
+async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
+    let req: HttpRequest = stream.read_http_request().await?;
     if req.get_method().eq("CONNECT") {
         Ok(req)
     } else {
@@ -32,15 +30,15 @@ async fn wait_until_http_proxy_connect(
 
 async fn connect_and_join(addr: &str) -> Result<NeckStream, Box<dyn Error>> {
     let stream = NeckStream::new(TcpStream::connect(addr).await?);
-    let req = HttpRequestBasic::new("JOIN", "*", "HTTP/1.1", vec![]);
-    stream.write(req.to_string()).await?;
+    let req = HttpRequest::new("JOIN", "*", "HTTP/1.1", vec![]);
+    stream.write(&req.to_bytes()).await?;
     let res = stream.read_http_response().await?;
     if res.get_status() == 200 {
         Ok(stream)
     } else {
         Err(Box::new(NeckError::new(format!(
             "Failed to join, get status {}",
-            res.get_raw_status()
+            res.get_status()
         ))))
     }
 }

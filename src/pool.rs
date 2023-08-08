@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 
 use crate::{
-    http::{HttpCommonBasic, HttpRequestBasic, HttpResponse},
+    http::{HttpCommonBasic, HttpRequest},
     neck::NeckStream,
 };
 
@@ -68,7 +68,7 @@ impl Pool {
             // Send the PROXY request to upstream.
             // This operation can be retryed.
             match stream
-                .write(HttpRequestBasic::new("CONNECT", uri, "HTTP/1.1", vec![]).to_string())
+                .write(&HttpRequest::new("CONNECT", uri, "HTTP/1.1", vec![]).to_bytes())
                 .await
             {
                 Ok(_) => (),
@@ -89,7 +89,9 @@ impl Pool {
 
             // Got a non-200 status, this means proxy server cannot process this request, retrying is pointless.
             if res.get_status() != 200 {
-                return ProxyResult::ServiceUnavailable(res.get_payload().to_string());
+                let text =
+                    String::from_utf8(res.get_payload().to_vec()).unwrap_or_else(|e| e.to_string());
+                return ProxyResult::ServiceUnavailable(text);
             }
 
             // Success, return the NeckStream object (transfer ownership).

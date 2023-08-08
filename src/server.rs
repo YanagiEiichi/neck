@@ -8,6 +8,7 @@ use crate::{
     pool::{Pool, ProxyResult},
 };
 
+/// Process an HTTPS proxy request.
 async fn connect_handler(
     stream: NeckStream,
     req: &HttpRequestBasic,

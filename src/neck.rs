@@ -83,6 +83,13 @@ impl NeckStream {
         writer.write(res.as_bytes()).await
     }
 
+    pub async fn peek_one_byte(am_reader: Arc<Mutex<BufReader<OwnedReadHalf>>>) -> usize {
+        let mut buf_reader = am_reader.lock().await;
+        let raw_reader = buf_reader.get_mut();
+        let mut buf = [0u8; 1];
+        raw_reader.peek(&mut buf).await.unwrap()
+    }
+
     /// Weld with another NeckStream (Start a bidirectional stream copy).
     /// After welding, do not use these streams elsewhere because both streams will be fully consumed.
     pub async fn weld(&self, upstream: &Self) {
@@ -108,7 +115,7 @@ impl NeckStream {
     }
 
     /// Shutdown the connection immediately.
-    pub async fn shutdown(&self) -> Result<(), io::Error> {
+    pub async fn shutdown(&self) -> Result<(), impl Error> {
         self.writer.lock().await.shutdown().await
     }
 }

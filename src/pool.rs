@@ -3,22 +3,16 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 
 use crate::{
-    http::{HttpCommonBasic, HttpRequestBasic, HttpResponse, HttpResponseBasic},
+    http::{HttpCommonBasic, HttpRequestBasic, HttpResponse},
     neck::NeckStream,
 };
 
-type FirstResponse = Arc<Mutex<Option<Result<HttpResponseBasic, String>>>>;
-type WrappedStream = NeckStream;
-type StorageItem = (WrappedStream, FirstResponse);
-
-type STORAGE = Arc<Mutex<HashMap<SocketAddr, StorageItem>>>;
-
 pub(crate) struct Pool {
-    storage: STORAGE,
+    storage: Arc<Mutex<HashMap<SocketAddr, NeckStream>>>,
 }
 
 pub enum ProxyResult {
-    Ok(WrappedStream),
+    Ok(NeckStream),
     BadGateway(),
     ServiceUnavailable(String),
 }
@@ -30,49 +24,41 @@ impl Pool {
         }
     }
 
+    /// Get the current size of the pool.
     pub async fn len(&self) -> usize {
         self.storage.lock().await.len()
     }
 
+    /// Join the pool.
     pub async fn join(&self, stream: NeckStream) {
-        let shared_first_response: FirstResponse = Arc::new(Mutex::new(None));
-
-        let am_first_response = shared_first_response.clone();
-        let mut first_responses = am_first_response.lock().await;
-
+        // The NeckStream will be moved later, so we need to clone necessary properties before moving.
         let addr = stream.peer_addr.clone();
         let am_reader = stream.reader.clone();
 
-        self.storage
-            .lock()
-            .await
-            .insert(addr, (stream, shared_first_response));
+        // Store the NeckStream into the global pool (ownership has beed moved).
+        self.storage.lock().await.insert(addr, stream);
 
-        *first_responses = Some(
-            HttpResponseBasic::read_from(&mut *am_reader.lock().await)
-                .await
-                .map_err(|e| e.to_string()),
-        );
-
+        // To detect the EOF of a TcpStream, we must keep reading or peeking at it.
+        // If this connection has been closed by peer and is still stored in the global pool,
+        // we need remove the bad connection from global pool.
+        // Otherwise, it could negatively impact other threads attempting to use the bad connection.
+        NeckStream::peek_one_byte(am_reader).await;
         self.storage.lock().await.remove(&addr);
     }
 
-    async fn take(&self) -> Option<StorageItem> {
+    async fn take(&self) -> Option<NeckStream> {
         let mut map = self.storage.lock().await;
         let key = *map.keys().into_iter().next()?;
         map.remove(&key)
     }
 
-    pub async fn connect(
-        &self,
-        // stream: &NeckStream,
-        uri: &str,
-    ) -> ProxyResult {
+    /// Attempt to acquire a NeckStream from the pool and establish the HTTP proxy connection.
+    pub async fn connect(&self, uri: &str) -> ProxyResult {
         // This is a retry loop, where certain operations can be retried, with a maximum of 5 retry attempts.
         for _ in 1..=5 {
             // Take a item from pool without retry.
             // If the pool is empty, retrying is pointless.
-            let (stream, first_response) = match self.take().await {
+            let stream = match self.take().await {
                 Some(k) => k,
                 None => {
                     break;
@@ -91,26 +77,19 @@ impl Pool {
                 }
             }
 
-            {
-                // Read the first response from upstream.
-                // This operation can be retryed.
-                let first_response = first_response.lock().await;
-                let res = match first_response.as_ref() {
-                    Some(result) => match result {
-                        Ok(res) => res,
-                        Err(_) => {
-                            continue;
-                        }
-                    },
-                    None => {
-                        continue;
-                    }
-                };
-
-                // Got a non-200 status, this means proxy server cannot process this request, retrying is pointless.
-                if res.get_status() != 200 {
-                    return ProxyResult::ServiceUnavailable(res.get_payload().to_string());
+            // Read the first response from upstream.
+            // This operation can be retryed.
+            // let first_response = first_response.lock().await;
+            let res = match stream.read_http_response().await {
+                Ok(res) => res,
+                Err(_) => {
+                    continue;
                 }
+            };
+
+            // Got a non-200 status, this means proxy server cannot process this request, retrying is pointless.
+            if res.get_status() != 200 {
+                return ProxyResult::ServiceUnavailable(res.get_payload().to_string());
             }
 
             // Success, return the NeckStream object (transfer ownership).

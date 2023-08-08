@@ -17,18 +17,18 @@ impl HttpRequest {
     }
 
     /// Returns a reference to the get method of this [`HttpRequest`].
-    pub fn get_method(&self) -> &String {
-        &self.first_line.0
+    pub fn get_method(&self) -> &str {
+        self.first_line.get_first()
     }
 
     /// Returns a reference to the get uri of this [`HttpRequest`].
-    pub fn get_uri(&self) -> &String {
-        &self.first_line.1
+    pub fn get_uri(&self) -> &str {
+        self.first_line.get_second()
     }
 
     /// Returns a reference to the get version of this [`HttpRequest`].
-    pub fn get_version(&self) -> &String {
-        &self.first_line.2
+    pub fn get_version(&self) -> &str {
+        self.first_line.get_third()
     }
 }
 

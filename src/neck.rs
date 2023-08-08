@@ -64,11 +64,7 @@ impl NeckStream {
         headers.push(String::from("Content-Type: text/plain"));
         headers.push(format!("Content-Length: {}", payload.as_bytes().len()));
         HttpProtocol::new(
-            FirstLine(
-                String::from(version),
-                status.to_string(),
-                String::from(text),
-            ),
+            FirstLine::new(version, &status.to_string(), text),
             headers,
             payload.as_bytes().to_vec(),
         )
@@ -79,18 +75,14 @@ impl NeckStream {
     /// Send an HTTP request.
     pub async fn request(
         &self,
-        method: impl ToString,
-        uri: impl ToString,
-        version: impl ToString,
+        method: &str,
+        uri: &str,
+        version: &str,
         headers: impl Into<Headers>,
     ) -> Result<(), Box<dyn Error>> {
-        HttpProtocol::new(
-            FirstLine(method.to_string(), uri.to_string(), version.to_string()),
-            headers,
-            Vec::new(),
-        )
-        .write_to(&mut *self.writer.lock().await)
-        .await
+        HttpProtocol::new(FirstLine::new(method, uri, version), headers, Vec::new())
+            .write_to(&mut *self.writer.lock().await)
+            .await
     }
 
     pub async fn peek_one_byte(am_reader: Arc<Mutex<BufReader<OwnedReadHalf>>>) -> usize {

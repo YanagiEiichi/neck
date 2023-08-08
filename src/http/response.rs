@@ -18,19 +18,19 @@ impl HttpResponse {
 
     /// Returns a reference to the get version of this [`HttpResponse`].
     #[allow(dead_code)]
-    pub fn get_version(&self) -> &String {
-        &self.first_line.0
+    pub fn get_version(&self) -> &str {
+        self.first_line.get_first()
     }
 
     /// Returns the get status of this [`HttpResponse`].
     pub fn get_status(&self) -> u16 {
-        self.first_line.1.parse().unwrap_or_default()
+        self.first_line.get_second().parse().unwrap_or_default()
     }
 
     /// Returns a reference to the get text of this [`HttpResponse`].
     #[allow(dead_code)]
-    pub fn get_text(&self) -> &String {
-        &self.first_line.2
+    pub fn get_text(&self) -> &str {
+        self.first_line.get_third()
     }
 }
 

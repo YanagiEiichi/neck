@@ -75,33 +75,59 @@ pub trait HttpCommon {
 }
 
 #[derive(Debug)]
-pub struct FirstLine(pub String, pub String, pub String);
+pub struct FirstLine(String, usize, usize);
 
 impl FirstLine {
-    fn new(raw: String) -> Result<Self, Box<dyn Error>> {
-        if let Some((first, rest)) = raw.split_once(' ') {
-            if let Some((second, third)) = rest.split_once(' ') {
-                return Ok(FirstLine(
-                    String::from(first),
-                    String::from(second),
-                    String::from(third),
-                ));
-            }
-        }
-        HttpError::wrap("Bad HTTP protocol")
+    /// Creates a new [`FirstLine`].
+    pub fn new(first: &str, second: &str, third: &str) -> Self {
+        FirstLine(
+            format!("{} {} {}", first, second, third),
+            first.len(),
+            first.len() + 1 + second.len(),
+        )
     }
 
-    // Convert to HTTP protocol bytes.
-    async fn write_to<T>(&self, w: &mut T) -> Result<(), Box<dyn Error>>
+    /// Parse an HTTP first line.
+    ///
+    /// For example:
+    /// raw = "GET /home HTTP/1.1"
+    /// gap1 = 3 # Location of the first space character.
+    /// offset = gap1 + 1 = 4 # Skip the first space.
+    /// gap2 = offset + 5 = 9 # Find space location from "/home .."
+    /// Therefore,
+    /// get_first returns [..gap1] is "GET"
+    /// get_second returns [gap1+1..gap2] is "/home"
+    /// get_third returns [gap2+1..] is "HTTP/1.1"
+    ///
+    pub fn parse(raw: String) -> Option<Self> {
+        let gap1 = raw.find(' ')?;
+        let offset = gap1 + 1;
+        let gap2 = offset + raw[offset..].find(' ')?;
+        Some(FirstLine(raw, gap1, gap2))
+    }
+
+    /// Returns a reference to the get first of this [`FirstLine`].
+    pub fn get_first(&self) -> &str {
+        &self.0[..self.1]
+    }
+
+    /// Returns a reference to the get second of this [`FirstLine`].
+    pub fn get_second(&self) -> &str {
+        &self.0[self.1 + 1..self.2]
+    }
+
+    /// Returns a reference to the get third of this [`FirstLine`].
+    pub fn get_third(&self) -> &str {
+        &self.0[self.2 + 1..]
+    }
+
+    /// Write all data to an AsyncWrite
+    pub async fn write_to<T>(&self, w: &mut T) -> Result<(), Box<dyn Error>>
     where
         T: Unpin,
         T: AsyncWrite,
     {
         w.write_all(self.0.as_bytes()).await?;
-        w.write_all(b" ").await?;
-        w.write_all(self.1.as_bytes()).await?;
-        w.write_all(b" ").await?;
-        w.write_all(self.2.as_bytes()).await?;
         w.write_all(b"\r\n").await?;
         Ok(())
     }
@@ -134,8 +160,13 @@ impl HttpProtocol {
         // Read HTTP header lines.
         let mut lines = read_lines(stream).await?;
 
-        // Split first line as an iterator.
-        let first_line = FirstLine::new(lines.remove(0))?;
+        // Try to parse HTTP first line.
+        let first_line = match FirstLine::parse(lines.remove(0)) {
+            Some(v) => v,
+            None => {
+                return HttpError::wrap("Bad HTTP Protocol");
+            }
+        };
 
         // Create headers (The first line has remove above).
         let headers = lines.into();
@@ -146,6 +177,7 @@ impl HttpProtocol {
         Ok(HttpProtocol::new(first_line, headers, payload))
     }
 
+    /// Write all data to an AsyncWrite
     pub async fn write_to<T>(&self, w: &mut T) -> Result<(), Box<dyn Error>>
     where
         T: Unpin,

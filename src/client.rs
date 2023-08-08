@@ -55,7 +55,7 @@ async fn setup_connection(addr: &str) -> Result<(), Box<dyn Error>> {
     let req = wait_until_http_proxy_connect(&stream).await?;
 
     // Attempt to connect the upstream server.
-    match TcpStream::connect(req.get_uri().as_str()).await {
+    match TcpStream::connect(req.get_uri()).await {
         // If the connection is established successfully.
         Ok(upstream) => {
             println!("[{}] Connect to {}", stream.local_addr, req.get_uri());

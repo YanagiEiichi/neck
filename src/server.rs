@@ -168,7 +168,7 @@ async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) -> Result<(), String> 
         .map_err(|e| e.to_string())?;
 
     // Dispatch to different handlers.
-    match req.get_method().as_str() {
+    match req.get_method() {
         "CONNECT" => connect_handler(stream, &req, pool).await,
         "JOIN" => join_handler(stream, &req, pool).await,
         _ => {

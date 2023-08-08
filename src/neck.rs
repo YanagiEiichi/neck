@@ -10,7 +10,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::http::{HttpCommon, HttpProtocol, HttpRequest, HttpResponse};
+use crate::http::{Headers, HttpCommon, HttpProtocol, HttpRequest, HttpResponse};
 
 pub struct NeckStream {
     pub peer_addr: SocketAddr,
@@ -52,12 +52,6 @@ impl NeckStream {
         HttpResponse::read_from(&mut reader).await
     }
 
-    /// Write a string to writter.
-    pub async fn write(&self, data: &Vec<u8>) -> Result<usize, std::io::Error> {
-        let mut writer = self.writer.lock().await;
-        writer.write(data).await
-    }
-
     /// Send an HTTP response.
     pub async fn respond(
         &self,
@@ -77,6 +71,23 @@ impl NeckStream {
             ),
             headers,
             payload.as_bytes().to_vec(),
+        );
+        let mut writer = self.writer.lock().await;
+        writer.write(&res.to_bytes()).await
+    }
+
+    /// Send an HTTP request.
+    pub async fn request(
+        &self,
+        method: impl ToString,
+        uri: impl ToString,
+        version: impl ToString,
+        headers: impl Into<Headers>,
+    ) -> Result<usize, io::Error> {
+        let res = HttpProtocol::new(
+            crate::http::FirstLine(method.to_string(), uri.to_string(), version.to_string()),
+            headers,
+            Vec::new(),
         );
         let mut writer = self.writer.lock().await;
         writer.write(&res.to_bytes()).await

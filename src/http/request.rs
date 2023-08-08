@@ -2,7 +2,7 @@ use std::error::Error;
 
 use tokio::io::{AsyncRead, BufReader};
 
-use super::{FirstLine, Headers, HttpCommon, HttpProtocol};
+use super::{Headers, HttpCommon, HttpProtocol};
 
 #[derive(Debug)]
 pub struct HttpRequest {
@@ -10,20 +10,6 @@ pub struct HttpRequest {
 }
 
 impl HttpRequest {
-    pub fn new(method: &str, uri: &str, version: &str, headers: impl Into<Headers>) -> HttpRequest {
-        HttpRequest {
-            protocol: HttpProtocol::new(
-                FirstLine(
-                    String::from(method),
-                    String::from(uri),
-                    String::from(version),
-                ),
-                headers.into(),
-                Vec::new(),
-            ),
-        }
-    }
-
     pub async fn read_from<T>(mut stream: &mut BufReader<T>) -> Result<HttpRequest, Box<dyn Error>>
     where
         T: Unpin,

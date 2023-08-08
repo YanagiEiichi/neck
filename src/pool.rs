@@ -2,10 +2,7 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use tokio::sync::Mutex;
 
-use crate::{
-    http::{HttpCommon, HttpRequest},
-    neck::NeckStream,
-};
+use crate::{http::HttpCommon, neck::NeckStream};
 
 pub(crate) struct Pool {
     storage: Arc<Mutex<HashMap<SocketAddr, NeckStream>>>,
@@ -67,10 +64,7 @@ impl Pool {
 
             // Send the PROXY request to upstream.
             // This operation can be retryed.
-            match stream
-                .write(&HttpRequest::new("CONNECT", uri, "HTTP/1.1", vec![]).to_bytes())
-                .await
-            {
+            match stream.request("CONNECT", uri, "HTTP/1.1", vec![]).await {
                 Ok(_) => (),
                 Err(_) => {
                     continue;

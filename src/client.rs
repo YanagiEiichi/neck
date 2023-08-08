@@ -2,15 +2,11 @@ use std::{error::Error, ops::Add, time::Duration};
 
 use tokio::{net::TcpStream, spawn, time};
 
-use crate::{
-    http::{HttpCommon, HttpRequest},
-    neck::NeckStream,
-    utils::NeckError,
-};
+use crate::{http::HttpRequest, neck::NeckStream, utils::NeckError};
 
 async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
     // Attempt to read a HTTP request.
-    let req: HttpRequest = stream.read_http_request().await?;
+    let req = stream.read_http_request().await?;
 
     // If method is "CONNECT" return the `req` directly.
     if req.get_method().eq("CONNECT") {
@@ -37,8 +33,7 @@ async fn connect_and_join(addr: &str) -> Result<NeckStream, Box<dyn Error>> {
     let stream = NeckStream::new(TcpStream::connect(addr).await?);
 
     // Attempt to send a JOIN request.
-    let req = HttpRequest::new("JOIN", "*", "HTTP/1.1", vec![]);
-    stream.write(&req.to_bytes()).await?;
+    stream.request("JOIN", "*", "HTTP/1.1", vec![]).await?;
 
     // Attempt to read the corresponding response of the JOIN request above.
     let res = stream.read_http_response().await?;

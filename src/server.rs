@@ -115,12 +115,11 @@ async fn simple_http_proxy_handler(
                 );
                 let mut headers = req.get_headers().clone();
                 headers.remove("Proxy-Connection");
+
                 upstream
-                    .write(
-                        &HttpRequest::new(req.get_method(), path, req.get_version(), headers)
-                            .to_bytes(),
-                    )
+                    .request(req.get_method(), path, req.get_version(), headers)
                     .await?;
+
                 stream.weld(&upstream).await;
             }
             ProxyResult::BadGateway() => {

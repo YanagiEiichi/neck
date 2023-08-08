@@ -48,22 +48,23 @@ where
 async fn read_payload<T>(
     stream: &mut BufReader<T>,
     headers: &Headers,
-) -> Result<Vec<u8>, Box<dyn Error>>
+    buf: &mut Vec<u8>,
+) -> Result<u64, Box<dyn Error>>
 where
     T: Unpin,
     T: AsyncRead,
 {
-    let mut buf = Vec::<u8>::new();
     // Get the Content-Length field.
     if let Some(value) = headers.get_header("Content-Length") {
         // Parse it into a integer.
         let len = value.parse::<u64>()?;
         if len > 0 {
             // Read bytes.
-            stream.take(len).read_to_end(&mut buf).await?;
+            stream.take(len).read_to_end(buf).await?;
         }
+        return Ok(len);
     }
-    Ok(buf)
+    return Ok(0);
 }
 
 pub trait HttpCommon {
@@ -157,6 +158,21 @@ impl HttpProtocol {
         T: Unpin,
         T: AsyncRead,
     {
+        let mut pl = Self::read_header_from(stream).await?;
+
+        // Read playload
+        read_payload(stream, &pl.headers, &mut pl.payload).await?;
+
+        Ok(pl)
+    }
+
+    pub(crate) async fn read_header_from<T>(
+        stream: &mut BufReader<T>,
+    ) -> Result<HttpProtocol, Box<dyn Error>>
+    where
+        T: Unpin,
+        T: AsyncRead,
+    {
         // Read HTTP header lines.
         let mut lines = read_lines(stream).await?;
 
@@ -169,10 +185,10 @@ impl HttpProtocol {
         };
 
         // Create headers (The first line has remove above).
-        let headers = lines.into();
+        let headers: Headers = lines.into();
 
         // Read playload
-        let payload = read_payload(stream, &headers).await?;
+        let payload = Vec::new();
 
         Ok(HttpProtocol::new(first_line, headers, payload))
     }

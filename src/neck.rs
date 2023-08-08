@@ -40,10 +40,17 @@ impl NeckStream {
         }
     }
 
-    /// Read an HTTP request (wait for an HTTP request to be received completely).
+    /// Read an HTTP request, and wait for an HTTP request to be received completely.
     pub async fn read_http_request(&self) -> Result<HttpRequest, Box<dyn Error>> {
         let mut reader = self.reader.lock().await;
         HttpRequest::read_from(&mut reader).await
+    }
+
+    /// Read an HTTP request (wait for an HTTP request to be received completely).
+    /// NOTE: The payload will not be readed.
+    pub async fn read_http_request_header_only(&self) -> Result<HttpRequest, Box<dyn Error>> {
+        let mut reader = self.reader.lock().await;
+        HttpRequest::read_header_from(&mut reader).await
     }
 
     /// Read an HTTP response (wait for an HTTP response to be received completely).

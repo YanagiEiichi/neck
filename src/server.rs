@@ -162,8 +162,9 @@ async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) -> Result<(), String> 
     let stream = NeckStream::new(tcp_stream);
 
     // Read the first request.
+    // NOTE: Do not read payload here, because payload may be a huge stream.
     let req = stream
-        .read_http_request()
+        .read_http_request_header_only()
         .await
         .map_err(|e| e.to_string())?;
 

@@ -16,6 +16,16 @@ impl HttpRequest {
         Ok(HttpRequest(HttpProtocol::read_from(stream).await?))
     }
 
+    pub async fn read_header_from<T>(
+        stream: &mut BufReader<T>,
+    ) -> Result<HttpRequest, Box<dyn Error>>
+    where
+        T: Unpin,
+        T: AsyncRead,
+    {
+        Ok(HttpRequest(HttpProtocol::read_header_from(stream).await?))
+    }
+
     /// Returns a reference to the get method of this [`HttpRequest`].
     pub fn get_method(&self) -> &str {
         self.first_line.get_first()

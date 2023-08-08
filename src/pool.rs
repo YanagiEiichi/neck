@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 
 use crate::{
-    http::{HttpCommonBasic, HttpRequest},
+    http::{HttpCommon, HttpRequest},
     neck::NeckStream,
 };
 

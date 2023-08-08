@@ -10,7 +10,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::http::{HttpCommonBasic, HttpProtocol, HttpRequest, HttpResponse};
+use crate::http::{HttpCommon, HttpProtocol, HttpRequest, HttpResponse};
 
 pub struct NeckStream {
     pub peer_addr: SocketAddr,

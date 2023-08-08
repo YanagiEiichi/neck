@@ -67,9 +67,14 @@ where
     Ok(buf)
 }
 
-pub trait HttpCommonBasic {
+pub trait HttpCommon {
+    /// Get HTTP headers
     fn get_headers(&self) -> &Headers;
+
+    // Convert to HTTP protocol bytes.
     fn to_bytes(&self) -> Vec<u8>;
+
+    /// Get the payload.
     fn get_payload(&self) -> &Vec<u8>;
 }
 
@@ -140,7 +145,7 @@ impl HttpProtocol {
     }
 }
 
-impl HttpCommonBasic for HttpProtocol {
+impl HttpCommon for HttpProtocol {
     fn get_headers(&self) -> &Headers {
         &self.headers
     }

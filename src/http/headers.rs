@@ -20,6 +20,7 @@ impl IntoIterator for Headers {
 }
 
 impl Headers {
+    /// Get a header value by name (case-insensitive).
     pub fn get_header(&self, key: &str) -> Option<String> {
         let l_key = key.to_lowercase();
         self.0.iter().find_map(|l| {
@@ -32,6 +33,7 @@ impl Headers {
         })
     }
 
+    /// Remove a header by name (case-insensitive).
     pub fn remove(&mut self, key: &str) -> Option<String> {
         let l_key = key.to_lowercase();
         let index = self.0.iter().position(|l| match l.find(':') {
@@ -41,6 +43,7 @@ impl Headers {
         Some(self.0.remove(index))
     }
 
+    /// Write data into a Vec<u8>
     pub fn write_bytes(&self, r: &mut Vec<u8>) {
         for i in &self.0 {
             r.extend(i.as_bytes());

@@ -3,7 +3,7 @@ use std::{error::Error, sync::Arc};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
-    http::{HttpCommonBasic, HttpRequest},
+    http::{HttpCommon, HttpRequest},
     neck::NeckStream,
     pool::{Pool, ProxyResult},
 };

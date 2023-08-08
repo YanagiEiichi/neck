@@ -2,7 +2,7 @@ use std::error::Error;
 
 use tokio::io::{AsyncRead, BufReader};
 
-use super::{FirstLine, Headers, HttpCommonBasic, HttpProtocol};
+use super::{FirstLine, Headers, HttpCommon, HttpProtocol};
 
 #[derive(Debug)]
 pub struct HttpRequest {
@@ -47,7 +47,7 @@ impl HttpRequest {
     }
 }
 
-impl HttpCommonBasic for HttpRequest {
+impl HttpCommon for HttpRequest {
     fn get_headers(&self) -> &Headers {
         &self.protocol.headers
     }

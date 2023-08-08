@@ -2,7 +2,7 @@ use std::error::Error;
 
 use tokio::io::{AsyncRead, BufReader};
 
-use super::{Headers, HttpCommonBasic, HttpProtocol};
+use super::{Headers, HttpCommon, HttpProtocol};
 
 pub struct HttpResponse {
     protocol: HttpProtocol,
@@ -37,7 +37,7 @@ impl HttpResponse {
     }
 }
 
-impl HttpCommonBasic for HttpResponse {
+impl HttpCommon for HttpResponse {
     fn get_headers(&self) -> &Headers {
         &self.protocol.headers
     }

@@ -3,7 +3,7 @@ use std::{error::Error, ops::Add, time::Duration};
 use tokio::{net::TcpStream, time};
 
 use crate::{
-    http::{HttpCommonBasic, HttpRequest},
+    http::{HttpCommon, HttpRequest},
     neck::NeckStream,
     utils::NeckError,
 };

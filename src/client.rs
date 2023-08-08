@@ -1,6 +1,6 @@
 use std::{error::Error, ops::Add, time::Duration};
 
-use tokio::{net::TcpStream, time};
+use tokio::{net::TcpStream, spawn, time};
 
 use crate::{
     http::{HttpCommon, HttpRequest},
@@ -91,13 +91,13 @@ async fn start_worker(addr: String) {
 }
 
 pub async fn start(addr: String, connections: u16) {
-    let mut tasks = Vec::new();
-    for _i in 1..=connections {
-        tasks.push(tokio::spawn(start_worker(addr.clone())));
-    }
+    // Create threads for each client connect.
+    let tasks: Vec<_> = (0..connections)
+        .map(|_| spawn(start_worker(addr.clone())))
+        .collect();
+
+    // Wait all tasks done (actually nobody will be done).
     for task in tasks {
-        tokio::select! {
-          _ = task => ()
-        }
+        let _ = task.await;
     }
 }

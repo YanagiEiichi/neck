@@ -30,7 +30,7 @@ async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpReques
 /// Create a connection and try to join the NeckServer.
 async fn connect_and_join(addr: &str) -> Result<NeckStream, Box<dyn Error>> {
     // Attempt to connect Neck Server.
-    let stream = NeckStream::new(TcpStream::connect(addr).await?);
+    let stream = NeckStream::from(TcpStream::connect(addr).await?);
 
     // Attempt to send a JOIN request.
     stream.request("JOIN", "*", "HTTP/1.1", vec![]).await?;
@@ -66,7 +66,7 @@ async fn setup_connection(addr: &str) -> Result<(), Box<dyn Error>> {
                 .await?;
 
             // Weld the client connection with upstream.
-            stream.weld(&NeckStream::new(upstream)).await;
+            stream.weld(&NeckStream::from(upstream)).await;
 
             Ok(())
         }

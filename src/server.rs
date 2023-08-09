@@ -168,7 +168,7 @@ async fn api_handler(
 
 async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) {
     // Wrap the raw TcpStream with a NeckStream.
-    let stream = NeckStream::new(tcp_stream);
+    let stream = NeckStream::from(tcp_stream);
 
     // Read the first request.
     // NOTE: Do not read payload here, because payload may be a huge stream.

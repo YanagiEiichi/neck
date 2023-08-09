@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
-use tokio::sync::Mutex;
+use tokio::{io::AsyncBufReadExt, sync::Mutex};
 
 use crate::{http::HttpCommon, neck::NeckStream};
 
@@ -39,7 +39,8 @@ impl Pool {
         // If this connection has been closed by peer and is still stored in the global pool,
         // we need remove the bad connection from global pool.
         // Otherwise, it could negatively impact other threads attempting to use the bad connection.
-        NeckStream::peek_one_byte(am_reader).await;
+        let _ = am_reader.lock().await.fill_buf().await;
+
         self.storage.lock().await.remove(&addr);
     }
 

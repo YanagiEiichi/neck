@@ -1,11 +1,8 @@
 use std::{error::Error, net::SocketAddr, sync::Arc};
 
 use tokio::{
-    io::{self, AsyncWriteExt, BufReader},
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpStream,
-    },
+    io::{self, split, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader},
+    net::TcpStream,
     select,
     sync::Mutex,
 };
@@ -15,8 +12,8 @@ use crate::http::{FirstLine, Headers, HttpProtocol, HttpRequest, HttpResponse};
 pub struct NeckStream {
     pub peer_addr: SocketAddr,
     pub local_addr: SocketAddr,
-    pub writer: Mutex<OwnedWriteHalf>,
-    pub reader: Arc<Mutex<BufReader<OwnedReadHalf>>>,
+    pub writer: Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
+    pub reader: Arc<Mutex<BufReader<Box<dyn AsyncRead + Send + Unpin>>>>,
 }
 
 // impl Drop for NeckStream {
@@ -26,17 +23,16 @@ pub struct NeckStream {
 // }
 
 impl NeckStream {
-    pub fn new(stream: TcpStream) -> NeckStream {
-        let peer_addr = stream.peer_addr().unwrap();
-        let local_addr = stream.local_addr().unwrap();
-        let (orh, owh) = stream.into_split();
-        let reader = Arc::new(Mutex::new(BufReader::new(orh)));
-        let writer = Mutex::new(owh);
-        NeckStream {
+    pub fn new<T>(peer_addr: SocketAddr, local_addr: SocketAddr, stream: T) -> Self
+    where
+        T: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    {
+        let (r, w) = split(stream);
+        Self {
             peer_addr,
             local_addr,
-            writer,
-            reader,
+            writer: Mutex::new(Box::new(w)),
+            reader: Arc::new(Mutex::new(BufReader::new(Box::new(r)))),
         }
     }
 
@@ -92,13 +88,6 @@ impl NeckStream {
             .await
     }
 
-    pub async fn peek_one_byte(am_reader: Arc<Mutex<BufReader<OwnedReadHalf>>>) -> usize {
-        let mut buf_reader = am_reader.lock().await;
-        let raw_reader = buf_reader.get_mut();
-        let mut buf = [0u8; 1];
-        raw_reader.peek(&mut buf).await.unwrap()
-    }
-
     /// Weld with another NeckStream (Start a bidirectional stream copy).
     /// After welding, do not use these streams elsewhere because both streams will be fully consumed.
     pub async fn weld(&self, upstream: &Self) {
@@ -126,5 +115,13 @@ impl NeckStream {
     /// Shutdown the connection immediately.
     pub async fn shutdown(&self) -> Result<(), impl Error> {
         self.writer.lock().await.shutdown().await
+    }
+}
+
+impl From<TcpStream> for NeckStream {
+    fn from(stream: TcpStream) -> Self {
+        let peer_addr = stream.peer_addr().unwrap();
+        let local_addr = stream.local_addr().unwrap();
+        Self::new(peer_addr, local_addr, stream)
     }
 }

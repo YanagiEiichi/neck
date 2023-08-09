@@ -25,9 +25,18 @@ enum Commands {
     Join {
         /// Proxy server address
         addr: String,
+
         /// The provided connections defaults 100
         #[arg(short, long)]
         connections: Option<u16>,
+
+        /// Connect proxy server using TLS.
+        #[clap(long, action)]
+        tls: bool,
+
+        /// Specify the domain for TLS, using the hostname of addr by default.
+        #[arg(long)]
+        tls_domain: Option<String>,
     },
 }
 
@@ -44,9 +53,15 @@ async fn main() {
                 .unwrap_or(a);
             server::start(a).await;
         }
-        Commands::Join { addr, connections } => {
+        Commands::Join {
+            addr,
+            connections,
+            tls,
+            tls_domain,
+        } => {
             // Start client
-            client::start(addr, connections.unwrap_or(100)).await
+            let ctx = client::ClientContext::new(addr, connections, tls, tls_domain);
+            client::start(ctx).await;
         }
     }
 }

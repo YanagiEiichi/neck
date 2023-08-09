@@ -1,4 +1,4 @@
-use std::{error::Error, ops::Add, time::Duration};
+use std::{error::Error, ops::Add, sync::Arc, time::Duration};
 
 use tokio::{net::TcpStream, spawn, time};
 
@@ -28,9 +28,9 @@ async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpReques
 }
 
 /// Create a connection and try to join the NeckServer.
-async fn connect_and_join(addr: &str) -> Result<NeckStream, Box<dyn Error>> {
-    // Attempt to connect Neck Server.
-    let stream = NeckStream::from(TcpStream::connect(addr).await?);
+async fn connect_and_join(ctx: &ClientContext) -> Result<NeckStream, Box<dyn Error>> {
+    // Attempt to connect NeckServer.
+    let stream = ctx.connect().await?;
 
     // Attempt to send a JOIN request.
     stream.request("JOIN", "*", "HTTP/1.1", vec![]).await?;
@@ -47,9 +47,9 @@ async fn connect_and_join(addr: &str) -> Result<NeckStream, Box<dyn Error>> {
     NeckError::wrap(format!("Failed to join, get status {}", res.get_status()))
 }
 
-async fn setup_connection(addr: &str) -> Result<(), Box<dyn Error>> {
+async fn setup_connection(ctx: &ClientContext) -> Result<(), Box<dyn Error>> {
     // Create a connection and try to join the NeckServer.
-    let stream = connect_and_join(addr).await?;
+    let stream = connect_and_join(ctx).await?;
 
     // Wait for any received CONNECT requests.
     let req = wait_until_http_proxy_connect(&stream).await?;
@@ -89,16 +89,20 @@ async fn setup_connection(addr: &str) -> Result<(), Box<dyn Error>> {
     }
 }
 
-async fn start_worker(addr: String) {
+async fn start_worker(ctx: Arc<ClientContext>) {
     // Initialize a failure counter.
     let mut failures: u8 = 0;
 
     loop {
-        failures = match setup_connection(addr.as_str()).await {
+        failures = match setup_connection(&ctx).await {
             // Reset failure counter if the taks success.
             Ok(_) => 0,
             // Increase the failure counter (maximum of 6).
-            Err(_) => failures.add(1).min(6),
+            #[allow(unused_variables)]
+            Err(e) => {
+                // eprintln!("{}", e.to_string());
+                failures.add(1).min(6)
+            }
         };
         // If the failure counter is not zero, sleep for a few seconds (following exponential backoff).
         if failures > 0 {
@@ -107,10 +111,70 @@ async fn start_worker(addr: String) {
     }
 }
 
-pub async fn start(addr: String, connections: u16) {
+pub struct ClientContext {
+    pub addr: String,
+    pub connections: Option<u16>,
+    tls: Option<(tokio_native_tls::TlsConnector, String)>,
+}
+
+impl ClientContext {
+    pub fn new(
+        addr: String,
+        connections: Option<u16>,
+        tls_enabled: bool,
+        tls_domain: Option<String>,
+    ) -> Self {
+        // Create tls context only when tls is enabled.
+        let tls = tls_enabled.then(|| {
+            (
+                // Initialize the TlsConnector
+                native_tls::TlsConnector::new().unwrap().into(),
+                // If tls_domain is not set, get the hostname from addr.
+                tls_domain.unwrap_or_else(|| addr.split(':').next().unwrap().to_string()),
+            )
+        });
+
+        Self {
+            addr,
+            connections,
+            tls,
+        }
+    }
+
+    pub async fn connect(&self) -> Result<NeckStream, Box<dyn Error>> {
+        // Attempt to connect Neck Server.
+        let tcp_stream = TcpStream::connect(&self.addr).await?;
+
+        // Connect NeckServer (may over TLS)
+        let stream: NeckStream = match self.tls.as_ref() {
+            Some((connector, domain)) => {
+                let peer_addr = tcp_stream.peer_addr().unwrap();
+                let local_addr = tcp_stream.local_addr().unwrap();
+                NeckStream::new(
+                    peer_addr,
+                    local_addr,
+                    connector.connect(domain, tcp_stream).await?,
+                )
+            }
+            None => {
+                // Wrap the connection with NeckStream
+                tcp_stream.into()
+            }
+        };
+        Ok(stream)
+    }
+}
+
+pub async fn start(ctx: ClientContext) {
+    // Wrap ctx with Arc, it will be used in all child threads.
+    let shared_ctx = Arc::new(ctx);
+
+    // The connections is defaults 100
+    let connections = shared_ctx.connections.unwrap_or(100);
+
     // Create threads for each client connection.
     let tasks: Vec<_> = (0..connections)
-        .map(|_| spawn(start_worker(addr.clone())))
+        .map(|_| spawn(start_worker(shared_ctx.clone())))
         .collect();
 
     // Wait for all tasks to be completed.

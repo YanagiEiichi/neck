@@ -38,5 +38,7 @@ Arguments:
 
 Options:
   -c, --connections <CONNECTIONS>  The provided connections defaults 100
+      --tls                        Connect proxy server using TLS
+      --tls-domain <TLS_DOMAIN>    Specify the domain for TLS, using the hostname of addr by default
   -h, --help                       Print help
 ```

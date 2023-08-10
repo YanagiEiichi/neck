@@ -3,6 +3,7 @@ mod headers;
 mod protocol;
 mod request;
 mod response;
+mod tests;
 
 pub use error::*;
 pub use headers::*;

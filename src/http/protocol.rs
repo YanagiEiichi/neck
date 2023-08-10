@@ -117,12 +117,7 @@ impl HttpProtocol {
         let mut lines = read_lines(stream).await?;
 
         // Try to parse HTTP first line.
-        let first_line = match FirstLine::parse(lines.remove(0)) {
-            Some(v) => v,
-            None => {
-                return HttpError::wrap("Bad HTTP Protocol");
-            }
-        };
+        let first_line: FirstLine = lines.remove(0).try_into()?;
 
         // Create headers (The first line has remove above).
         let headers: Headers = lines.into();

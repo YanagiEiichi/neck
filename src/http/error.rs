@@ -4,8 +4,11 @@ use std::{error::Error, fmt::Display};
 pub struct HttpError(String);
 
 impl HttpError {
+    pub fn new(message: impl ToString) -> Self {
+        Self(message.to_string())
+    }
     pub fn wrap<T>(message: impl ToString) -> Result<T, Box<dyn Error>> {
-        Err(Box::new(HttpError(String::from(message.to_string()))))
+        Err(Box::new(Self::new(message)))
     }
 }
 

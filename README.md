@@ -1,4 +1,4 @@
-# Neck
+# Neck · [![LICENSE](https://img.shields.io/github/license/YanagiEiichi/neck)](LICENSE.txt) [![Unit Tests](https://github.com/YanagiEiichi/neck/actions/workflows/test.yml/badge.svg)](https://github.com/YanagiEiichi/neck/actions/workflows/test.yml)
 
 A specialized HTTP proxy server used to traverse unidirectional network limitations.
 

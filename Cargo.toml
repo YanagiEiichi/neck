@@ -2,6 +2,11 @@
 name = "neck"
 version = "0.1.0"
 edition = "2021"
+authors = ["YanagiEiichi <576398868@qq.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/YanagiEiichi/neck"
+description = "A specialized HTTP proxy server used to traverse unidirectional network limitations."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

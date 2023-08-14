@@ -1,16 +1,20 @@
-use super::Pool;
+use super::{Hub, MockPool, Pool};
 
 pub struct ServerContext {
     pub addr: String,
-    pub pool: Pool,
+    pub pool: Box<dyn Hub>,
 }
 
 impl ServerContext {
     /// Creates a new [`ServerContext`].
-    pub fn new(addr: Option<String>) -> Self {
+    pub fn new(addr: Option<String>, direct: bool) -> Self {
         Self {
             addr: fix_addr(addr),
-            pool: Pool::new(),
+            pool: if direct {
+                Box::new(MockPool {})
+            } else {
+                Box::new(Pool::new())
+            },
         }
     }
 }

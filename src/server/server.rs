@@ -16,7 +16,7 @@ async fn connect_upstream(
     version: &str,
     ctx: &Arc<ServerContext>,
 ) -> Result<NeckStream, Box<dyn Error>> {
-    match ctx.pool.connect(host).await {
+    match ctx.pool.connect(host.to_string()).await {
         ProxyResult::Ok(v) => Ok(v),
 
         // Not enough available worker connections in the pool.

@@ -21,6 +21,10 @@ enum Commands {
     Serve {
         /// Binding the listening address defaults "0.0.0.0:1081"
         addr: Option<String>,
+
+        /// Proxy directly from the server without creating a worker pool.
+        #[clap(long, action)]
+        direct: bool,
     },
     /// Create some worker connections and join the pool of the server
     Join {
@@ -46,8 +50,8 @@ async fn main() {
     let args = Args::parse();
 
     match args.command {
-        Commands::Serve { addr } => {
-            server::start(ServerContext::new(addr)).await;
+        Commands::Serve { addr, direct } => {
+            server::start(ServerContext::new(addr, direct)).await;
         }
 
         Commands::Join {

@@ -2,6 +2,8 @@ mod client;
 mod client_context;
 mod connector;
 mod tcp_connector;
+
+#[cfg(feature = "tls")]
 mod tls_connector;
 
 pub use client::*;

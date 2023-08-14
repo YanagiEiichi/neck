@@ -4,7 +4,7 @@ use tokio::{io::AsyncBufReadExt, sync::Mutex};
 
 use crate::{http::HttpCommon, neck::NeckStream};
 
-pub(crate) struct Pool {
+pub struct Pool {
     storage: Arc<Mutex<HashMap<SocketAddr, NeckStream>>>,
 }
 

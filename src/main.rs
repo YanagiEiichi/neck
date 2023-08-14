@@ -1,9 +1,10 @@
 use clap::{Parser, Subcommand};
+use client::ClientContext;
+use server::ServerContext;
 
 mod client;
 mod http;
 mod neck;
-mod pool;
 mod server;
 mod utils;
 
@@ -43,16 +44,12 @@ enum Commands {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+
     match args.command {
         Commands::Serve { addr } => {
-            let mut a = addr.unwrap_or_else(|| String::from("0.0.0.0:1081"));
-            // Convert port number to "0.0.0.0:{}"
-            a = a
-                .parse::<u16>()
-                .map(|i| format!("0.0.0.0:{}", i))
-                .unwrap_or(a);
-            server::start(a).await;
+            server::start(ServerContext::new(addr)).await;
         }
+
         Commands::Join {
             addr,
             connections,
@@ -60,8 +57,7 @@ async fn main() {
             tls_domain,
         } => {
             // Start client
-            let ctx = client::ClientContext::new(addr, connections, tls, tls_domain);
-            client::start(ctx).await;
+            client::start(ClientContext::new(addr, connections, tls, tls_domain)).await;
         }
     }
 }

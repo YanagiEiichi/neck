@@ -5,17 +5,18 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::{
     http::{HttpCommon, HttpRequest},
     neck::NeckStream,
-    pool::{Pool, ProxyResult},
     utils::NeckError,
 };
+
+use super::{ProxyResult, ServerContext};
 
 async fn connect_upstream(
     stream: &NeckStream,
     host: &str,
     version: &str,
-    pool: &Arc<Pool>,
+    ctx: &Arc<ServerContext>,
 ) -> Result<NeckStream, Box<dyn Error>> {
-    match pool.connect(host).await {
+    match ctx.pool.connect(host).await {
         ProxyResult::Ok(v) => Ok(v),
 
         // Not enough available worker connections in the pool.
@@ -57,10 +58,10 @@ async fn connect_upstream(
 async fn connect_handler(
     stream: NeckStream,
     req: &HttpRequest,
-    pool: Arc<Pool>,
+    ctx: &Arc<ServerContext>,
 ) -> Result<(), Box<dyn Error>> {
     // Attempt to connect upstream server via the proxy connection pool.
-    let upstream = connect_upstream(&stream, req.get_uri(), req.get_version(), &pool).await?;
+    let upstream = connect_upstream(&stream, req.get_uri(), req.get_version(), ctx).await?;
 
     // Now, a successful connection has been established with the upstream server.
 
@@ -85,7 +86,7 @@ async fn connect_handler(
 async fn simple_http_proxy_handler(
     stream: NeckStream,
     req: &HttpRequest,
-    pool: Arc<Pool>,
+    ctx: &Arc<ServerContext>,
 ) -> Result<(), Box<dyn Error>> {
     // Remove "http://" from left
     let uri = &req.get_uri()[7..];
@@ -105,7 +106,7 @@ async fn simple_http_proxy_handler(
     }
 
     // Attempt to connect upstream server via the proxy connection pool.
-    let upstream = connect_upstream(&stream, &host, req.get_version(), &pool).await?;
+    let upstream = connect_upstream(&stream, &host, req.get_version(), ctx).await?;
 
     // Now, a successful connection has been established with the upstream server.
 
@@ -134,7 +135,7 @@ async fn simple_http_proxy_handler(
 async fn join_handler(
     stream: NeckStream,
     req: &HttpRequest,
-    pool: Arc<Pool>,
+    ctx: &Arc<ServerContext>,
 ) -> Result<(), Box<dyn Error>> {
     // Respond a with 200 Welcome.
     stream
@@ -142,7 +143,7 @@ async fn join_handler(
         .await?;
 
     // Join the pool (ownership for the stream is moved to the pool)
-    pool.join(stream).await;
+    ctx.pool.join(stream).await;
 
     Ok(())
 }
@@ -150,11 +151,11 @@ async fn join_handler(
 async fn api_handler(
     stream: NeckStream,
     req: &HttpRequest,
-    pool: Arc<Pool>,
+    ctx: &Arc<ServerContext>,
 ) -> Result<(), Box<dyn Error>> {
     let uri = req.get_uri();
     if uri.eq("/pool/len") && req.get_method().eq("GET") {
-        let payload = pool.len().await.to_string() + "\n";
+        let payload = ctx.pool.len().await.to_string() + "\n";
         stream
             .respond(200, "OK", req.get_version(), &payload)
             .await?;
@@ -166,7 +167,7 @@ async fn api_handler(
     Ok(())
 }
 
-async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) {
+async fn dispatch(tcp_stream: TcpStream, ctx: Arc<ServerContext>) {
     // Wrap the raw TcpStream with a NeckStream.
     let stream = NeckStream::from(tcp_stream);
 
@@ -187,16 +188,16 @@ async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) {
 
     // Dispatch to different handlers.
     match req.get_method() {
-        "CONNECT" => connect_handler(stream, &req, pool).await,
-        "JOIN" => join_handler(stream, &req, pool).await,
+        "CONNECT" => connect_handler(stream, &req, &ctx).await,
+        "JOIN" => join_handler(stream, &req, &ctx).await,
         _ => {
             // It is a simple HTTP proxy request.
             if req.get_uri().starts_with("http://") {
-                simple_http_proxy_handler(stream, &req, pool).await
+                simple_http_proxy_handler(stream, &req, &ctx).await
             }
             // Others.
             else {
-                api_handler(stream, &req, pool).await
+                api_handler(stream, &req, &ctx).await
             }
         }
     }
@@ -209,9 +210,11 @@ async fn dispatch(tcp_stream: TcpStream, pool: Arc<Pool>) {
 }
 
 /// Start a neck server.
-pub async fn start(addr: String) {
+pub async fn start(ctx: ServerContext) {
+    let shared_ctx = Arc::new(ctx);
+
     // Begin TCP listening on specified address.
-    let listener = match TcpListener::bind(addr).await {
+    let listener = match TcpListener::bind(&shared_ctx.addr).await {
         Ok(v) => v,
         Err(e) => {
             eprint!("{}", e);
@@ -219,14 +222,11 @@ pub async fn start(addr: String) {
         }
     };
 
-    // Create the global storage.
-    let shared_pool = Arc::new(Pool::new());
-
     loop {
         // Accept all requests and dispatch each of them using a new thread.
         match listener.accept().await {
             Ok((stream, _)) => {
-                tokio::spawn(dispatch(stream, shared_pool.clone()));
+                tokio::spawn(dispatch(stream, shared_ctx.clone()));
             }
             Err(e) => {
                 eprint!("{}", e);

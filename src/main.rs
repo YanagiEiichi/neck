@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use client::NeckClient;
-use server::ServerContext;
+use server::NeckServer;
 
 mod client;
 mod http;
@@ -51,7 +51,7 @@ async fn main() {
 
     match args.command {
         Commands::Serve { addr, direct } => {
-            server::start(ServerContext::new(addr, direct)).await;
+            NeckServer::new(addr, direct).start().await;
         }
 
         Commands::Join {

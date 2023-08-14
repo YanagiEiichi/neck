@@ -1,6 +1,6 @@
 use std::{borrow::Cow, error::Error, sync::Arc};
 
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpStream;
 
 use crate::{
     http::{HttpCommon, HttpRequest},
@@ -8,13 +8,13 @@ use crate::{
     utils::NeckError,
 };
 
-use super::{connection_manager::ConnectingResult, ServerContext};
+use super::{connection_manager::ConnectingResult, NeckServer};
 
 async fn connect_upstream(
     stream: &NeckStream,
     host: &str,
     version: &str,
-    ctx: &Arc<ServerContext>,
+    ctx: &Arc<NeckServer>,
 ) -> Result<NeckStream, Box<dyn Error>> {
     match ctx.manager.connect(host.to_string()).await {
         ConnectingResult::Ok(v) => Ok(v),
@@ -58,7 +58,7 @@ async fn connect_upstream(
 async fn connect_handler(
     stream: NeckStream,
     req: &HttpRequest,
-    ctx: &Arc<ServerContext>,
+    ctx: &Arc<NeckServer>,
 ) -> Result<(), Box<dyn Error>> {
     // Attempt to connect upstream server via the proxy connection manager.
     let upstream = connect_upstream(&stream, req.get_uri(), req.get_version(), ctx).await?;
@@ -86,7 +86,7 @@ async fn connect_handler(
 async fn simple_http_proxy_handler(
     stream: NeckStream,
     req: &HttpRequest,
-    ctx: &Arc<ServerContext>,
+    ctx: &Arc<NeckServer>,
 ) -> Result<(), Box<dyn Error>> {
     // Remove "http://" from left
     let uri = &req.get_uri()[7..];
@@ -135,7 +135,7 @@ async fn simple_http_proxy_handler(
 async fn join_handler(
     stream: NeckStream,
     req: &HttpRequest,
-    ctx: &Arc<ServerContext>,
+    ctx: &Arc<NeckServer>,
 ) -> Result<(), Box<dyn Error>> {
     // Respond a with 200 Welcome.
     stream
@@ -151,7 +151,7 @@ async fn join_handler(
 async fn api_handler(
     stream: NeckStream,
     req: &HttpRequest,
-    ctx: &Arc<ServerContext>,
+    ctx: &Arc<NeckServer>,
 ) -> Result<(), Box<dyn Error>> {
     let uri = req.get_uri();
     if uri.eq("/manager/len") && req.get_method().eq("GET") {
@@ -167,7 +167,7 @@ async fn api_handler(
     Ok(())
 }
 
-async fn dispatch(tcp_stream: TcpStream, ctx: Arc<ServerContext>) {
+pub async fn request_handler(tcp_stream: TcpStream, ctx: Arc<NeckServer>) {
     // Wrap the raw TcpStream with a NeckStream.
     let stream = NeckStream::from(tcp_stream);
 
@@ -207,30 +207,4 @@ async fn dispatch(tcp_stream: TcpStream, ctx: Arc<ServerContext>) {
             // println!("{:#?}", e);
         },
     )
-}
-
-/// Start a neck server.
-pub async fn start(ctx: ServerContext) {
-    let shared_ctx = Arc::new(ctx);
-
-    // Begin TCP listening on specified address.
-    let listener = match TcpListener::bind(&shared_ctx.addr).await {
-        Ok(v) => v,
-        Err(e) => {
-            eprint!("{}", e);
-            return;
-        }
-    };
-
-    loop {
-        // Accept all requests and dispatch each of them using a new thread.
-        match listener.accept().await {
-            Ok((stream, _)) => {
-                tokio::spawn(dispatch(stream, shared_ctx.clone()));
-            }
-            Err(e) => {
-                eprint!("{}", e);
-            }
-        };
-    }
 }

@@ -1,8 +1,11 @@
-use super::{Hub, MockPool, Pool};
+use super::{
+    connection_manager::ConnectionManager, direct_mode_manager::DirectModeManager,
+    pool_mode_manager::PoolModeManager,
+};
 
 pub struct ServerContext {
     pub addr: String,
-    pub pool: Box<dyn Hub>,
+    pub manager: Box<dyn ConnectionManager>,
 }
 
 impl ServerContext {
@@ -10,22 +13,20 @@ impl ServerContext {
     pub fn new(addr: Option<String>, direct: bool) -> Self {
         Self {
             addr: fix_addr(addr),
-            pool: if direct {
-                Box::new(MockPool {})
+            manager: if direct {
+                Box::new(DirectModeManager {})
             } else {
-                Box::new(Pool::new())
+                Box::new(PoolModeManager::new())
             },
         }
     }
 }
 
 fn fix_addr(addr: Option<String>) -> String {
-    // Get addr, use "0.0.0.0:1081" as the default valeu.
     addr.map_or_else(
+        // Get addr, use "0.0.0.0:1081" as the default valeu.
         || String::from("0.0.0.0:1081"),
-        |v| {
-            // Convert pure number {port} to "0.0.0.0:{port}"
-            v.parse::<u16>().map_or(v, |i| format!("0.0.0.0:{}", i))
-        },
+        // Convert pure number {port} to "0.0.0.0:{port}"
+        |v| v.parse::<u16>().map_or(v, |i| format!("0.0.0.0:{}", i)),
     )
 }

@@ -8,7 +8,7 @@ use crate::{
     utils::NeckError,
 };
 
-use super::{ProxyResult, ServerContext};
+use super::{connection_manager::ConnectingResult, ServerContext};
 
 async fn connect_upstream(
     stream: &NeckStream,
@@ -16,11 +16,11 @@ async fn connect_upstream(
     version: &str,
     ctx: &Arc<ServerContext>,
 ) -> Result<NeckStream, Box<dyn Error>> {
-    match ctx.pool.connect(host.to_string()).await {
-        ProxyResult::Ok(v) => Ok(v),
+    match ctx.manager.connect(host.to_string()).await {
+        ConnectingResult::Ok(v) => Ok(v),
 
-        // Not enough available worker connections in the pool.
-        ProxyResult::BadGateway() => {
+        // Not enough available worker connections in the manager.
+        ConnectingResult::BadGateway() => {
             println!(
                 "[{}] No available connections for {}",
                 stream.peer_addr.to_string(),
@@ -39,7 +39,7 @@ async fn connect_upstream(
         }
 
         // Cannot establish a connection with the provided host.
-        ProxyResult::ServiceUnavailable(msg) => {
+        ConnectingResult::ServiceUnavailable(msg) => {
             println!(
                 "[{}] Failed to connect {}",
                 stream.peer_addr.to_string(),
@@ -60,7 +60,7 @@ async fn connect_handler(
     req: &HttpRequest,
     ctx: &Arc<ServerContext>,
 ) -> Result<(), Box<dyn Error>> {
-    // Attempt to connect upstream server via the proxy connection pool.
+    // Attempt to connect upstream server via the proxy connection manager.
     let upstream = connect_upstream(&stream, req.get_uri(), req.get_version(), ctx).await?;
 
     // Now, a successful connection has been established with the upstream server.
@@ -105,7 +105,7 @@ async fn simple_http_proxy_handler(
         host = Cow::Owned(format!("{}:80", host));
     }
 
-    // Attempt to connect upstream server via the proxy connection pool.
+    // Attempt to connect upstream server via the proxy connection manager.
     let upstream = connect_upstream(&stream, &host, req.get_version(), ctx).await?;
 
     // Now, a successful connection has been established with the upstream server.
@@ -142,8 +142,8 @@ async fn join_handler(
         .respond(200, "Welcome", req.get_version(), "")
         .await?;
 
-    // Join the pool (ownership for the stream is moved to the pool)
-    ctx.pool.join(stream).await;
+    // Join the manager (ownership for the stream is moved to the manager)
+    ctx.manager.join(stream).await;
 
     Ok(())
 }
@@ -154,8 +154,8 @@ async fn api_handler(
     ctx: &Arc<ServerContext>,
 ) -> Result<(), Box<dyn Error>> {
     let uri = req.get_uri();
-    if uri.eq("/pool/len") && req.get_method().eq("GET") {
-        let payload = ctx.pool.len().await.to_string() + "\n";
+    if uri.eq("/manager/len") && req.get_method().eq("GET") {
+        let payload = ctx.manager.len().await.to_string() + "\n";
         stream
             .respond(200, "OK", req.get_version(), &payload)
             .await?;

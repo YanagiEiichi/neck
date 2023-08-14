@@ -1,34 +1,17 @@
-use std::{collections::HashMap, future::Future, net::SocketAddr, pin::Pin, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
-use tokio::{io::AsyncBufReadExt, net::TcpStream, sync::Mutex};
+use tokio::{io::AsyncBufReadExt, sync::Mutex};
 
 use crate::{http::HttpCommon, neck::NeckStream};
 
-pub struct Pool {
+use super::connection_manager::{ConnectingResult, ConnectionManager, PBFuture};
+
+pub struct PoolModeManager {
     storage: Arc<Mutex<HashMap<SocketAddr, NeckStream>>>,
 }
 
-pub enum ProxyResult {
-    Ok(NeckStream),
-    BadGateway(),
-    ServiceUnavailable(String),
-}
-
-type PBFuture<'a, O> = Pin<Box<dyn Future<Output = O> + Send + 'a>>;
-
-pub trait Hub: Send + Sync {
-    /// Get the current size of the pool.
-    fn len(&self) -> PBFuture<usize>;
-
-    /// Join the pool.
-    fn join(&self, stream: NeckStream) -> PBFuture<()>;
-
-    /// Attempt to acquire a NeckStream from the pool and establish the HTTP proxy connection.
-    fn connect(&self, uri: String) -> PBFuture<ProxyResult>;
-}
-
-impl Pool {
-    pub fn new() -> Pool {
+impl PoolModeManager {
+    pub fn new() -> PoolModeManager {
         Self {
             storage: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -41,7 +24,7 @@ impl Pool {
     }
 }
 
-impl Hub for Pool {
+impl ConnectionManager for PoolModeManager {
     /// Get the current size of the pool.
     fn len(&self) -> PBFuture<usize> {
         Box::pin(async { self.storage.lock().await.len() })
@@ -68,7 +51,7 @@ impl Hub for Pool {
     }
 
     /// Attempt to acquire a NeckStream from the pool and establish the HTTP proxy connection.
-    fn connect(&self, uri: String) -> PBFuture<ProxyResult> {
+    fn connect(&self, uri: String) -> PBFuture<ConnectingResult> {
         Box::pin(async move {
             // This is a retry loop, where certain operations can be retried, with a maximum of 5 retry attempts.
             for _ in 1..=5 {
@@ -104,36 +87,15 @@ impl Hub for Pool {
                 if res.get_status() != 200 {
                     let text = String::from_utf8(res.get_payload().to_vec())
                         .unwrap_or_else(|e| e.to_string());
-                    return ProxyResult::ServiceUnavailable(text);
+                    return ConnectingResult::ServiceUnavailable(text);
                 }
 
                 // Success, return the NeckStream object (transfer ownership).
-                return ProxyResult::Ok(stream);
+                return ConnectingResult::Ok(stream);
             }
 
             // After too many retry attempts, a 502 status response is respond.
-            ProxyResult::BadGateway()
-        })
-    }
-}
-
-pub struct MockPool {}
-
-impl Hub for MockPool {
-    fn len(&self) -> PBFuture<usize> {
-        Box::pin(async { 0 })
-    }
-
-    fn join(&self, _stream: crate::neck::NeckStream) -> PBFuture<()> {
-        Box::pin(async {})
-    }
-
-    fn connect(&self, uri: String) -> PBFuture<crate::server::ProxyResult> {
-        Box::pin(async move {
-            match TcpStream::connect(&uri).await {
-                Ok(stream) => ProxyResult::Ok(stream.into()),
-                Err(e) => ProxyResult::ServiceUnavailable(e.to_string()),
-            }
+            ConnectingResult::BadGateway()
         })
     }
 }

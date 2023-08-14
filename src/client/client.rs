@@ -4,6 +4,8 @@ use tokio::{net::TcpStream, spawn, time};
 
 use crate::{http::HttpRequest, neck::NeckStream, utils::NeckError};
 
+use super::ClientContext;
+
 async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
     // Attempt to read a HTTP request.
     let req = stream.read_http_request().await?;
@@ -108,60 +110,6 @@ async fn start_worker(ctx: Arc<ClientContext>) {
         if failures > 0 {
             time::sleep(Duration::from_secs(1 << (failures - 1))).await;
         }
-    }
-}
-
-pub struct ClientContext {
-    pub addr: String,
-    pub connections: Option<u16>,
-    tls: Option<(tokio_native_tls::TlsConnector, String)>,
-}
-
-impl ClientContext {
-    pub fn new(
-        addr: String,
-        connections: Option<u16>,
-        tls_enabled: bool,
-        tls_domain: Option<String>,
-    ) -> Self {
-        // Create tls context only when tls is enabled.
-        let tls = tls_enabled.then(|| {
-            (
-                // Initialize the TlsConnector
-                native_tls::TlsConnector::new().unwrap().into(),
-                // If tls_domain is not set, get the hostname from addr.
-                tls_domain.unwrap_or_else(|| addr.split(':').next().unwrap().to_string()),
-            )
-        });
-
-        Self {
-            addr,
-            connections,
-            tls,
-        }
-    }
-
-    pub async fn connect(&self) -> Result<NeckStream, Box<dyn Error>> {
-        // Attempt to connect Neck Server.
-        let tcp_stream = TcpStream::connect(&self.addr).await?;
-
-        // Connect NeckServer (may over TLS)
-        let stream: NeckStream = match self.tls.as_ref() {
-            Some((connector, domain)) => {
-                let peer_addr = tcp_stream.peer_addr().unwrap();
-                let local_addr = tcp_stream.local_addr().unwrap();
-                NeckStream::new(
-                    peer_addr,
-                    local_addr,
-                    connector.connect(domain, tcp_stream).await?,
-                )
-            }
-            None => {
-                // Wrap the connection with NeckStream
-                tcp_stream.into()
-            }
-        };
-        Ok(stream)
     }
 }
 

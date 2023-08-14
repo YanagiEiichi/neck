@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use client::ClientContext;
+use client::NeckClient;
 use server::ServerContext;
 
 mod client;
@@ -33,7 +33,7 @@ enum Commands {
 
         /// The provided connections defaults 100
         #[arg(short, long)]
-        connections: Option<u16>,
+        connections: Option<u64>,
 
         /// Connect proxy server using TLS.
         #[clap(long, action)]
@@ -61,7 +61,9 @@ async fn main() {
             tls_domain,
         } => {
             // Start client
-            client::start(ClientContext::new(addr, connections, tls, tls_domain)).await;
+            NeckClient::new(addr, connections, tls, tls_domain)
+                .start()
+                .await;
         }
     }
 }

@@ -1,10 +1,10 @@
 use std::{error::Error, ops::Add, sync::Arc, time::Duration};
 
-use tokio::{net::TcpStream, spawn, time};
+use tokio::{net::TcpStream, time};
 
 use crate::{http::HttpRequest, neck::NeckStream, utils::NeckError};
 
-use super::ClientContext;
+use super::NeckClient;
 
 async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
     // Attempt to read a HTTP request.
@@ -30,7 +30,7 @@ async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpReques
 }
 
 /// Create a connection and try to join the NeckServer.
-async fn connect_and_join(ctx: &ClientContext) -> Result<NeckStream, Box<dyn Error>> {
+async fn connect_and_join(ctx: &NeckClient) -> Result<NeckStream, Box<dyn Error>> {
     // Attempt to connect NeckServer.
     let stream = ctx.connect().await?;
 
@@ -49,9 +49,12 @@ async fn connect_and_join(ctx: &ClientContext) -> Result<NeckStream, Box<dyn Err
     NeckError::wrap(format!("Failed to join, get status {}", res.get_status()))
 }
 
-async fn setup_connection(ctx: &ClientContext) -> Result<(), Box<dyn Error>> {
+async fn setup_connection(ctx: &NeckClient) -> Result<(), Box<dyn Error>> {
     // Create a connection and try to join the NeckServer.
     let stream = connect_and_join(ctx).await?;
+
+    // Update counter.
+    ctx.fire_joined_event().await;
 
     // Wait for any received CONNECT requests.
     let req = wait_until_http_proxy_connect(&stream).await?;
@@ -91,7 +94,7 @@ async fn setup_connection(ctx: &ClientContext) -> Result<(), Box<dyn Error>> {
     }
 }
 
-async fn start_worker(ctx: Arc<ClientContext>) {
+pub async fn start_worker(ctx: Arc<NeckClient>) {
     // Initialize a failure counter.
     let mut failures: u8 = 0;
 
@@ -108,26 +111,8 @@ async fn start_worker(ctx: Arc<ClientContext>) {
         };
         // If the failure counter is not zero, sleep for a few seconds (following exponential backoff).
         if failures > 0 {
+            ctx.fire_failed_event().await;
             time::sleep(Duration::from_secs(1 << (failures - 1))).await;
         }
-    }
-}
-
-pub async fn start(ctx: ClientContext) {
-    // Wrap ctx with Arc, it will be used in all child threads.
-    let shared_ctx = Arc::new(ctx);
-
-    // The connections is defaults 100
-    let connections = shared_ctx.connections.unwrap_or(100);
-
-    // Create threads for each client connection.
-    let tasks: Vec<_> = (0..connections)
-        .map(|_| spawn(start_worker(shared_ctx.clone())))
-        .collect();
-
-    // Wait for all tasks to be completed.
-    // Although in reality, none of them will be done, as they are running indefinitely.
-    for task in tasks {
-        let _ = task.await;
     }
 }

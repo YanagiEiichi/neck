@@ -10,30 +10,27 @@ env:
 
 jobs:
   publish:
-    name: Publish for ${{ matrix.os }}
+    name: Publish for ${{ matrix.os }} with feature ${{ matrix.feature }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         name: [linux, windows, macos]
-
+        feature: ["default", "tls"]
         include:
           - name: linux
             os: ubuntu-latest
-            artifact_name: target/release/neck
-            asset_name: neck-linux
+            filename: neck
           - name: windows
             os: windows-latest
-            artifact_name: target/release/neck.exe
-            asset_name: neck-windows
+            filename: neck.exe
           - name: macos
             os: macos-latest
-            artifact_name: target/release/neck
-            asset_name: neck-macos
+            filename: neck
 
     steps:
       - uses: actions/checkout@v3
-      - run: cargo build --release --locked
+      - run: cargo build --release --features ${{ matrix.feature }} --locked
       - uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.asset_name }}
-          path: ${{ matrix.artifact_name }}
+          name: neck-${{ matrix.feature }}-${{ matrix.name }}
+          path: target/release/${{ matrix.fielname }}

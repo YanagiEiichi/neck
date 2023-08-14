@@ -17,4 +17,5 @@ tokio = { version = "1.29.1", features = ["full"] }
 tokio-native-tls = "0.3.1"
 
 [features]
+default = []
 tls = []

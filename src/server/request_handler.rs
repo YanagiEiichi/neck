@@ -141,8 +141,10 @@ async fn join_handler(
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
 ) -> Result<(), Box<dyn Error>> {
-    // Respond a with 200 Welcome.
-    HttpResponse::new(200, "Welcome", req.get_version())
+    // Respond a status with 101 Switching Protocols.
+    HttpResponse::new(101, "Switching Protocols", req.get_version())
+        .add_header("Connection: Upgrade")
+        .add_header("Upgrade: neck")
         .write_to_stream(&stream)
         .await?;
 
@@ -192,20 +194,29 @@ pub async fn request_handler(tcp_stream: TcpStream, ctx: Arc<NeckServer>) {
     };
 
     // Dispatch to different handlers.
-    match req.get_method() {
-        "CONNECT" => connect_handler(stream, &req, &ctx).await,
-        "JOIN" => join_handler(stream, &req, &ctx).await,
-        _ => {
-            // It is a simple HTTP proxy request.
-            if req.get_uri().starts_with("http://") {
-                simple_http_proxy_handler(stream, &req, &ctx).await
-            }
-            // Others.
-            else {
-                api_handler(stream, &req, &ctx).await
-            }
+    if let "CONNECT" = req.get_method() {
+        connect_handler(stream, &req, &ctx).await
+    } else
+    // For HTTP Upgrade.
+    if let Some(upgrade) = req.headers.get_header("Upgrade") {
+        if upgrade.eq("neck") {
+            join_handler(stream, &req, &ctx).await
+        } else {
+            HttpResponse::new(400, "Bad Request", req.get_version())
+                .add_payload(format!("The protocol '{}' is not supported.", upgrade).as_bytes())
+                .write_to_stream(&stream)
+                .await
         }
+    } else
+    // It is a simple HTTP proxy request.
+    if req.get_uri().starts_with("http://") {
+        simple_http_proxy_handler(stream, &req, &ctx).await
     }
+    // Others.
+    else {
+        api_handler(stream, &req, &ctx).await
+    }
+    // Error handler.
     .unwrap_or_else(
         #[allow(unused_variables)]
         |e| {

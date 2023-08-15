@@ -70,6 +70,7 @@ impl ConnectionManager for PoolModeManager {
                 // Send the PROXY request to upstream.
                 // This operation can be retryed.
                 if HttpRequest::new("CONNECT", &uri, "HTTP/1.1")
+                    .add_header_kv("Host", &stream.peer_addr.to_string())
                     .write_to_stream(&stream)
                     .await
                     .is_err()

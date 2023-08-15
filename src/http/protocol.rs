@@ -5,7 +5,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWrite
 
 use tokio::io::BufReader;
 
-use super::{FirstLine, Headers, HttpError};
+use super::{FirstLine, HeaderRow, Headers, HttpError};
 
 /// Read a group of lines ending with an empty line from a BufReader.
 async fn read_lines<T>(stream: &mut BufReader<T>) -> Result<Vec<String>, Box<dyn Error>>
@@ -122,10 +122,15 @@ impl HttpProtocol {
         Ok(HttpProtocol::new(first_line, headers, None))
     }
 
-    /// Add a request header.
-    #[allow(unused)]
+    /// Add a request header with raw string.
     pub fn add_header(&mut self, kv: impl Into<Cow<'static, str>>) -> &mut Self {
         self.headers.push(kv.into().into_owned().into());
+        self
+    }
+
+    /// Add a request header with name and value.
+    pub fn add_header_kv(&mut self, name: &str, value: &str) -> &mut Self {
+        self.headers.push(HeaderRow::new_with_kv(name, value));
         self
     }
 

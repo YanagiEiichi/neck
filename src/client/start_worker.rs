@@ -34,8 +34,11 @@ async fn connect_and_join(ctx: &NeckClient) -> Result<NeckStream, Box<dyn Error>
     // Attempt to connect NeckServer.
     let stream = ctx.connect().await?;
 
-    // Attempt to send a JOIN request.
-    HttpRequest::new("JOIN", "*", "HTTP/1.1")
+    // Attempt to send a request with Upgrade: neck.
+    HttpRequest::new("GET", "/", "HTTP/1.1")
+        .add_header_kv("Host", &ctx.addr)
+        .add_header("Connection: Upgrade")
+        .add_header("Upgrade: neck")
         .write_to_stream(&stream)
         .await?;
 
@@ -43,7 +46,7 @@ async fn connect_and_join(ctx: &NeckClient) -> Result<NeckStream, Box<dyn Error>
     let res = HttpResponse::read_from(&stream).await?;
 
     // Return the stream object if a 200 status code received.
-    if res.get_status() == 200 {
+    if res.get_status() == 101 {
         return Ok(stream);
     }
 

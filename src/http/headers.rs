@@ -19,6 +19,11 @@ impl HeaderRow {
         Self(raw, colon)
     }
 
+    /// Creates a new [`HeaderRow`].
+    pub fn new_with_kv(name: &str, value: &str) -> Self {
+        Self::new(format!("{}: {}", name, value), name.len())
+    }
+
     /// Get header name
     pub fn get_name(&self) -> &str {
         &self.0[..self.1]

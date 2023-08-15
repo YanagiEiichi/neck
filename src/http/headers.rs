@@ -100,16 +100,16 @@ impl Headers {
     }
 
     /// Remove a header by name (case-insensitive).
+    #[allow(unused)]
     pub fn remove(&mut self, name: &str) -> Option<HeaderRow> {
         let index = self.0.iter().position(|l| l.eq_name(name))?;
         Some(self.0.remove(index))
     }
 
     /// Write the data into an AsyncWrite (a CRLF will be appended at the end of each item).
-    #[allow(unused)]
     pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
         for i in &self.0 {
-            i.write_to(w);
+            i.write_to(w).await?;
         }
         Ok(())
     }

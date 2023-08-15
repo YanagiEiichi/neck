@@ -2,7 +2,10 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use tokio::{io::AsyncBufReadExt, sync::Mutex};
 
-use crate::{http::HttpCommon, neck::NeckStream};
+use crate::{
+    http::{HttpCommon, HttpRequest},
+    neck::NeckStream,
+};
 
 use super::connection_manager::{ConnectingResult, ConnectionManager, PBFuture};
 
@@ -66,11 +69,12 @@ impl ConnectionManager for PoolModeManager {
 
                 // Send the PROXY request to upstream.
                 // This operation can be retryed.
-                match stream.request("CONNECT", &uri, "HTTP/1.1", vec![]).await {
-                    Ok(_) => (),
-                    Err(_) => {
-                        continue;
-                    }
+                if HttpRequest::new("CONNECT", &uri, "HTTP/1.1")
+                    .write_to_stream(&stream)
+                    .await
+                    .is_err()
+                {
+                    continue;
                 }
 
                 // Read the first response from upstream.

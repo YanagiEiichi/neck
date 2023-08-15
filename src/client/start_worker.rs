@@ -35,7 +35,9 @@ async fn connect_and_join(ctx: &NeckClient) -> Result<NeckStream, Box<dyn Error>
     let stream = ctx.connect().await?;
 
     // Attempt to send a JOIN request.
-    stream.request("JOIN", "*", "HTTP/1.1", vec![]).await?;
+    HttpRequest::new("JOIN", "*", "HTTP/1.1")
+        .write_to_stream(&stream)
+        .await?;
 
     // Attempt to read the corresponding response of the JOIN request above.
     let res = stream.read_http_response().await?;

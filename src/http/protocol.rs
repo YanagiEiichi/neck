@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::error::Error;
 
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -118,6 +119,23 @@ impl HttpProtocol {
         let headers: Headers = lines.into();
 
         Ok(HttpProtocol::new(first_line, headers, None))
+    }
+
+    /// Add a request header.
+    #[allow(unused)]
+    pub fn add_header(&mut self, kv: impl Into<Cow<'static, str>>) -> &mut Self {
+        self.headers.push(kv.into().into_owned().into());
+        self
+    }
+
+    /// Push data to payload.
+    pub fn add_payload(&mut self, bytes: &[u8]) -> &mut Self {
+        if let Some(payload) = self.payload.as_mut() {
+            payload.extend(bytes);
+        } else {
+            self.payload = Some(Vec::from(bytes));
+        }
+        self
     }
 
     /// Write all data to an AsyncWrite

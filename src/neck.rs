@@ -7,7 +7,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::http::{FirstLine, Headers, HttpProtocol, HttpRequest, HttpResponse};
+use crate::http::{HttpProtocol, HttpRequest, HttpResponse};
 
 pub struct NeckStream {
     pub peer_addr: SocketAddr,
@@ -55,24 +55,6 @@ impl NeckStream {
         HttpResponse::read_from(&mut reader).await
     }
 
-    pub async fn write_http_protocol(&self, data: &HttpProtocol) -> Result<(), Box<dyn Error>> {
-        let mut writer = self.writer.lock().await;
-        data.write_to(&mut *writer).await
-    }
-
-    /// Send an HTTP request.
-    pub async fn request(
-        &self,
-        method: &str,
-        uri: &str,
-        version: &str,
-        headers: impl Into<Headers>,
-    ) -> Result<(), Box<dyn Error>> {
-        HttpProtocol::new(FirstLine::new(method, uri, version), headers, None)
-            .write_to(&mut *self.writer.lock().await)
-            .await
-    }
-
     /// Weld with another NeckStream (Start a bidirectional stream copy).
     /// After welding, do not use these streams elsewhere because both streams will be fully consumed.
     pub async fn weld(&self, upstream: &Self) {
@@ -113,6 +95,7 @@ impl From<TcpStream> for NeckStream {
 
 impl HttpProtocol {
     pub async fn write_to_stream(&self, stream: &NeckStream) -> Result<(), Box<dyn Error>> {
-        stream.write_http_protocol(&self).await
+        let mut writer = stream.writer.lock().await;
+        self.write_to(&mut *writer).await
     }
 }

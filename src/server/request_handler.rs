@@ -118,14 +118,17 @@ async fn simple_http_proxy_handler(
         host
     );
 
-    // Remove Proxy-Connection header.
-    let mut headers = req.get_headers().clone();
-    headers.remove("Proxy-Connection");
-
     // Send an HTTP request (with the host part removed from original URI, leaving only the path part).
-    upstream
-        .request(req.get_method(), path, req.get_version(), headers)
-        .await?;
+    let mut m_req = HttpRequest::new(req.get_method(), path, req.get_version());
+
+    // Copy headers excluding Proxy-Connection.
+    for h in req.get_headers().iter() {
+        if !h.eq_name("Proxy-Connection") {
+            m_req.headers.push(h.clone());
+        }
+    }
+
+    m_req.write_to_stream(&upstream).await?;
 
     // Weld the client connection with upstream.
     stream.weld(&upstream).await;

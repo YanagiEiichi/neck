@@ -1,8 +1,11 @@
-use std::{error::Error, ops::Deref};
+use std::{
+    error::Error,
+    ops::{Deref, DerefMut},
+};
 
 use tokio::io::{AsyncRead, BufReader};
 
-use super::HttpProtocol;
+use super::{FirstLine, HttpProtocol};
 
 #[derive(Debug)]
 pub struct HttpRequest(HttpProtocol);
@@ -14,6 +17,15 @@ impl HttpRequest {
         T: AsyncRead,
     {
         Ok(HttpRequest(HttpProtocol::read_from(stream).await?))
+    }
+
+    /// Creates a new [`HttpRequest`].
+    pub fn new(method: &str, uri: &str, version: &str) -> Self {
+        Self(HttpProtocol::new(
+            FirstLine::new(method, uri, version),
+            Vec::new(),
+            None,
+        ))
     }
 
     pub async fn read_header_from<T>(
@@ -47,5 +59,10 @@ impl Deref for HttpRequest {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+impl DerefMut for HttpRequest {
+    fn deref_mut(&mut self) -> &mut HttpProtocol {
+        &mut self.0
     }
 }

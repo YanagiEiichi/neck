@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     error::Error,
     ops::{Deref, DerefMut},
 };
@@ -27,23 +26,6 @@ impl HttpResponse {
             Vec::new(),
             None,
         ))
-    }
-
-    /// Add a request header.
-    #[allow(unused)]
-    pub fn add_header(&mut self, kv: impl Into<Cow<'static, str>>) -> &mut Self {
-        self.headers.push(kv.into().into_owned().into());
-        self
-    }
-
-    /// Push data to payload.
-    pub fn add_payload(&mut self, bytes: &[u8]) -> &mut Self {
-        if let Some(payload) = self.payload.as_mut() {
-            payload.extend(bytes);
-        } else {
-            self.payload = Some(Vec::from(bytes));
-        }
-        self
     }
 
     /// Returns a reference to the get version of this [`HttpResponse`].

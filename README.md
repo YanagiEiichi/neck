@@ -64,12 +64,12 @@ participant Client as Neck Client
 participant Goal
 
 
-Client ->> Server: Establish TCP,<br/>send HTTP request via JOIN mthod.
+Client ->> Server: Establish TCP,<br/>send a HTTP request to upgrade to "neck" protocol.
 activate Client
 activate Server
-Server -->> Client: Respond with a status code of 200.
+Server -->> Client: Respond with a status code of 101.
 
-Note over Server,Client: Note This connection will not be closed here.<br/>It will be placed in a connection pool for future use.
+Note over Server,Client: This connection will not be closed here.<br/>It will be placed in a connection pool for future use.
 
 You ->> Server: Establish TCP,<br/>send HTTP request via CONNECT method.
 activate You

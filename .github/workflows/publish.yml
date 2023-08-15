@@ -19,18 +19,25 @@ jobs:
         include:
           - name: linux
             os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
             filename: neck
           - name: windows
             os: windows-latest
+            target: x86_64-pc-windows-msvc
             filename: neck.exe
           - name: macos
             os: macos-latest
+            target: x86_64-apple-darwin
             filename: neck
 
     steps:
       - uses: actions/checkout@v3
-      - run: cargo build --release --features ${{ matrix.feature }} --locked
+      - if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt install -y musl-tools --no-install-recommends
+          rustup target add x86_64-unknown-linux-musl
+      - run: cargo build --release --features ${{ matrix.feature }} --locked --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v3
         with:
           name: neck-${{ matrix.feature }}-${{ matrix.name }}
-          path: target/release/${{ matrix.fielname }}
+          path: target/${{ matrix.target }}/release/${{ matrix.filename }}

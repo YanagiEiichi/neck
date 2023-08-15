@@ -35,9 +35,16 @@ impl HeaderRow {
         self.0 = format!("{}: {}", self.get_name(), value);
     }
 
-    // Compare the name (case-insensitive).
+    /// Compare the name (case-insensitive).
     pub fn eq_name(&self, name: &str) -> bool {
         self.get_name().eq_ignore_ascii_case(name)
+    }
+
+    /// Write the data into an AsyncWrite (a CRLF will be appended at the end).
+    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
+        w.write_all(self.0.as_bytes()).await?;
+        w.write_all(b"\r\n").await?;
+        Ok(())
     }
 }
 
@@ -83,6 +90,7 @@ impl Headers {
     }
 
     /// Set a header value by name (case-insensitive).
+    #[allow(unused)]
     pub fn set_header(&mut self, name: &str, value: &str) {
         let found = self.0.iter_mut().find(|l| l.eq_name(name));
         match found {
@@ -97,11 +105,11 @@ impl Headers {
         Some(self.0.remove(index))
     }
 
-    /// Write data into a Write
+    /// Write the data into an AsyncWrite (a CRLF will be appended at the end of each item).
+    #[allow(unused)]
     pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
         for i in &self.0 {
-            w.write_all(i.as_bytes()).await?;
-            w.write_all(b"\r\n").await?;
+            i.write_to(w);
         }
         Ok(())
     }

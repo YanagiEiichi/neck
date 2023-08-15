@@ -1,18 +1,73 @@
-use std::{error::Error, ops::Deref};
+use std::{
+    error::Error,
+    ops::{Deref, DerefMut},
+};
 
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug, Clone)]
-pub struct Headers(Vec<String>);
+pub struct HeaderRow(
+    // The raw header row string (without CRLF).
+    String,
+    // Location of the first colon.
+    usize,
+);
+
+impl HeaderRow {
+    /// Get header name
+    pub fn get_name(&self) -> &str {
+        &self.0[..self.1]
+    }
+
+    /// Get header value
+    pub fn get_value(&self) -> &str {
+        // Some spaces may be places following the colon, so `trim_start` is needed here.
+        &self.0[self.1 + 1..].trim_start()
+    }
+
+    // Compare the name (case-insensitive).
+    pub fn eq_name(&self, name: &str) -> bool {
+        self.get_name().eq_ignore_ascii_case(name)
+    }
+}
+
+impl PartialEq for HeaderRow {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0) && self.1 == other.1
+    }
+}
+
+impl Deref for HeaderRow {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<String> for HeaderRow {
+    fn from(raw: String) -> Self {
+        // Find the first colon.
+        match raw.find(':') {
+            // If it exists, save it.
+            Some(colon) => Self(raw, colon),
+            // If no colon in the string, append a colon.
+            None => {
+                let colon = raw.len();
+                Self(raw + ":", colon)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Headers(Vec<HeaderRow>);
 
 impl Headers {
     /// Get a header value by name (case-insensitive).
-    pub fn get_header(&self, key: &str) -> Option<&str> {
-        let l_key = key.to_lowercase();
+    pub fn get_header(&self, name: &str) -> Option<&str> {
         self.0.iter().find_map(|l| {
-            let p = l.find(':')?;
-            if (&l[..p]).to_lowercase().eq(&l_key) {
-                Some(l[p + 1..].trim())
+            if l.eq_name(name) {
+                Some(l.get_value())
             } else {
                 None
             }
@@ -20,16 +75,12 @@ impl Headers {
     }
 
     /// Remove a header by name (case-insensitive).
-    pub fn remove(&mut self, key: &str) -> Option<String> {
-        let l_key = key.to_lowercase();
-        let index = self.0.iter().position(|l| match l.find(':') {
-            Some(p) => (&l[..p]).to_lowercase().eq(&l_key),
-            _ => false,
-        })?;
+    pub fn remove(&mut self, name: &str) -> Option<HeaderRow> {
+        let index = self.0.iter().position(|l| l.eq_name(name))?;
         Some(self.0.remove(index))
     }
 
-    // Write data into a Write
+    /// Write data into a Write
     pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
         for i in &self.0 {
             w.write_all(i.as_bytes()).await?;
@@ -41,7 +92,7 @@ impl Headers {
 
 impl From<Vec<String>> for Headers {
     fn from(value: Vec<String>) -> Self {
-        Self(value)
+        Self(value.into_iter().map(|v| HeaderRow::from(v)).collect())
     }
 }
 
@@ -52,17 +103,23 @@ impl FromIterator<String> for Headers {
 }
 
 impl Deref for Headers {
-    type Target = Vec<String>;
+    type Target = Vec<HeaderRow>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl IntoIterator for Headers {
-    type Item = String;
+impl DerefMut for Headers {
+    fn deref_mut(&mut self) -> &mut Vec<HeaderRow> {
+        &mut self.0
+    }
+}
 
-    type IntoIter = std::vec::IntoIter<String>;
+impl IntoIterator for Headers {
+    type Item = HeaderRow;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()

@@ -22,7 +22,7 @@ fn test_collect() {
         Some("1")
     );
 
-    assert_eq!(headers.remove("b"), Some(String::from("b: 2")));
+    assert_eq!(headers.remove("b"), Some("b: 2".to_string().into()));
 
     assert_eq!(headers.len(), 1);
     assert_eq!(headers.get_header("a"), Some("1"));

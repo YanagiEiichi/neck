@@ -36,25 +36,6 @@ impl NeckStream {
         }
     }
 
-    /// Read an HTTP request, and wait for an HTTP request to be received completely.
-    pub async fn read_http_request(&self) -> Result<HttpRequest, Box<dyn Error>> {
-        let mut reader = self.reader.lock().await;
-        HttpRequest::read_from(&mut reader).await
-    }
-
-    /// Read an HTTP request (wait for an HTTP request to be received completely).
-    /// NOTE: The payload will not be readed.
-    pub async fn read_http_request_header_only(&self) -> Result<HttpRequest, Box<dyn Error>> {
-        let mut reader = self.reader.lock().await;
-        HttpRequest::read_header_from(&mut reader).await
-    }
-
-    /// Read an HTTP response (wait for an HTTP response to be received completely).
-    pub async fn read_http_response(&self) -> Result<HttpResponse, Box<dyn Error>> {
-        let mut reader = self.reader.lock().await;
-        HttpResponse::read_from(&mut reader).await
-    }
-
     /// Weld with another NeckStream (Start a bidirectional stream copy).
     /// After welding, do not use these streams elsewhere because both streams will be fully consumed.
     pub async fn weld(&self, upstream: &Self) {
@@ -97,5 +78,30 @@ impl HttpProtocol {
     pub async fn write_to_stream(&self, stream: &NeckStream) -> Result<(), Box<dyn Error>> {
         let mut writer = stream.writer.lock().await;
         self.write_to(&mut *writer).await
+    }
+}
+
+impl HttpRequest {
+    /// Read an HTTP request, and wait for an HTTP request to be received completely.
+    pub async fn read_from(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
+        let mut reader = stream.reader.lock().await;
+        HttpProtocol::read_from(&mut reader).await.map(|v| v.into())
+    }
+
+    /// Read an HTTP request (wait for an HTTP request to be received completely).
+    /// NOTE: The payload will not be readed.
+    pub async fn read_header_from(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
+        let mut reader = stream.reader.lock().await;
+        HttpProtocol::read_header_from(&mut reader)
+            .await
+            .map(|v| v.into())
+    }
+}
+
+impl HttpResponse {
+    /// Read an HTTP response (wait for an HTTP response to be received completely).
+    pub async fn read_from(stream: &NeckStream) -> Result<HttpResponse, Box<dyn Error>> {
+        let mut reader = stream.reader.lock().await;
+        HttpProtocol::read_from(&mut reader).await.map(|v| v.into())
     }
 }

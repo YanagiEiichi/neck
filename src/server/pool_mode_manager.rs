@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::{io::AsyncBufReadExt, sync::Mutex};
 
 use crate::{
-    http::{HttpCommon, HttpRequest},
+    http::{HttpCommon, HttpRequest, HttpResponse},
     neck::NeckStream,
 };
 
@@ -80,7 +80,7 @@ impl ConnectionManager for PoolModeManager {
                 // Read the first response from upstream.
                 // This operation can be retryed.
                 // let first_response = first_response.lock().await;
-                let res = match stream.read_http_response().await {
+                let res = match HttpResponse::read_from(&stream).await {
                     Ok(res) => res,
                     Err(_) => {
                         continue;

@@ -1,9 +1,4 @@
-use std::{
-    error::Error,
-    ops::{Deref, DerefMut},
-};
-
-use tokio::io::{AsyncRead, BufReader};
+use std::ops::{Deref, DerefMut};
 
 use super::{FirstLine, HttpProtocol};
 
@@ -11,14 +6,6 @@ use super::{FirstLine, HttpProtocol};
 pub struct HttpResponse(HttpProtocol);
 
 impl HttpResponse {
-    pub async fn read_from<T>(stream: &mut BufReader<T>) -> Result<HttpResponse, Box<dyn Error>>
-    where
-        T: Unpin,
-        T: AsyncRead,
-    {
-        Ok(HttpResponse(HttpProtocol::read_from(stream).await?))
-    }
-
     /// Creates a new [`HttpResponse`].
     pub fn new(status: u16, text: &str, version: &str) -> Self {
         Self(HttpProtocol::new(
@@ -57,5 +44,11 @@ impl Deref for HttpResponse {
 impl DerefMut for HttpResponse {
     fn deref_mut(&mut self) -> &mut HttpProtocol {
         &mut self.0
+    }
+}
+
+impl From<HttpProtocol> for HttpResponse {
+    fn from(protocol: HttpProtocol) -> Self {
+        Self(protocol)
     }
 }

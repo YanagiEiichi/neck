@@ -12,7 +12,7 @@ use super::NeckClient;
 
 async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
     // Attempt to read a HTTP request.
-    let req = stream.read_http_request().await?;
+    let req = HttpRequest::read_from(stream).await?;
 
     // If method is "CONNECT" return the `req` directly.
     if req.get_method().eq("CONNECT") {
@@ -40,7 +40,7 @@ async fn connect_and_join(ctx: &NeckClient) -> Result<NeckStream, Box<dyn Error>
         .await?;
 
     // Attempt to read the corresponding response of the JOIN request above.
-    let res = stream.read_http_response().await?;
+    let res = HttpResponse::read_from(&stream).await?;
 
     // Return the stream object if a 200 status code received.
     if res.get_status() == 200 {

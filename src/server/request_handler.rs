@@ -179,8 +179,7 @@ pub async fn request_handler(tcp_stream: TcpStream, ctx: Arc<NeckServer>) {
 
     // Read the first request.
     // NOTE: Do not read payload here, because payload may be a huge stream.
-    let req = match stream
-        .read_http_request_header_only()
+    let req = match HttpRequest::read_header_from(&stream)
         .await
         .map_err(|e| e.to_string())
     {

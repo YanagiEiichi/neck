@@ -74,6 +74,7 @@ pub trait HttpCommon {
 pub struct HttpProtocol {
     pub first_line: FirstLine,
     pub headers: Headers,
+    // TODO: Move payload out as another struct.
     pub payload: Option<Vec<u8>>,
 }
 
@@ -142,8 +143,8 @@ impl HttpProtocol {
     pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
         self.first_line.write_to(w).await?;
 
-        // Calculate the actual value of Content-Length.
         match self.payload.as_ref() {
+            // Recalculate the actual value of Content-Length.
             Some(payload) => {
                 let mut content_type_sent = false;
                 for h in self.headers.iter() {
@@ -170,8 +171,8 @@ impl HttpProtocol {
                 w.write_all(format!("Content-Length: {}\r\n", payload.len()).as_bytes())
                     .await?;
             }
+            // Pass all headers through.
             None => {
-                // Pass all headers through.
                 self.headers.write_to(w).await?;
             }
         }

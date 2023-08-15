@@ -2,7 +2,11 @@ use std::{error::Error, ops::Add, sync::Arc, time::Duration};
 
 use tokio::{net::TcpStream, time};
 
-use crate::{http::HttpRequest, neck::NeckStream, utils::NeckError};
+use crate::{
+    http::{HttpRequest, HttpResponse},
+    neck::NeckStream,
+    utils::NeckError,
+};
 
 use super::NeckClient;
 
@@ -16,13 +20,9 @@ async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpReques
     }
 
     // Otherwise, respond with a 405 status code.
-    stream
-        .respond(
-            405,
-            "Method Not Allowed",
-            req.get_version(),
-            format!("Method '{}' not allowed\n", req.get_method()).as_str(),
-        )
+    HttpResponse::new(405, "Method Not Allowed", req.get_version())
+        .add_payload(format!("Method '{}' not allowed\n", req.get_method()).as_bytes())
+        .write_to_stream(stream)
         .await?;
 
     // And return a standard error object.
@@ -66,8 +66,8 @@ async fn setup_connection(ctx: &NeckClient) -> Result<(), Box<dyn Error>> {
             println!("[{}] Connect to {}", stream.local_addr, req.get_uri());
 
             // Answer the CONNECT request
-            stream
-                .respond(200, "Connection Established", req.get_version(), "")
+            HttpResponse::new(200, "Connection Established", req.get_version())
+                .write_to_stream(&stream)
                 .await?;
 
             // Weld the client connection with upstream.
@@ -80,13 +80,10 @@ async fn setup_connection(ctx: &NeckClient) -> Result<(), Box<dyn Error>> {
             println!("[{}] Faild to connect {}", stream.local_addr, req.get_uri());
 
             // Answer a 503 status.
-            stream
-                .respond(
-                    503,
-                    "Service Unavailable",
-                    req.get_version(),
-                    (e.to_string() + "\n").as_str(),
-                )
+            HttpResponse::new(503, "Service Unavailable", req.get_version())
+                .add_payload(e.to_string().as_bytes())
+                .add_payload(b"\n")
+                .write_to_stream(&stream)
                 .await?;
 
             NeckError::wrap(format!("Failed to connect {}", req.get_uri()))

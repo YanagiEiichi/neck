@@ -85,8 +85,11 @@ impl ConnectionManager for PoolModeManager {
 
                 // Got a non-200 status, this means proxy server cannot process this request, retrying is pointless.
                 if res.get_status() != 200 {
-                    let text = String::from_utf8(res.get_payload().to_vec())
-                        .unwrap_or_else(|e| e.to_string());
+                    let payload = res
+                        .get_payload()
+                        .as_ref()
+                        .map_or_else(Vec::default, |v| v.to_vec());
+                    let text = String::from_utf8(payload).unwrap_or_else(|e| e.to_string());
                     return ConnectingResult::ServiceUnavailable(text);
                 }
 

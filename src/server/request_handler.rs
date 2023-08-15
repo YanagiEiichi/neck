@@ -3,7 +3,7 @@ use std::{borrow::Cow, error::Error, sync::Arc};
 use tokio::net::TcpStream;
 
 use crate::{
-    http::{HttpCommon, HttpRequest},
+    http::{HttpCommon, HttpRequest, HttpResponse},
     neck::NeckStream,
     utils::NeckError,
 };
@@ -26,14 +26,12 @@ async fn connect_upstream(
                 stream.peer_addr.to_string(),
                 host
             );
-            stream
-                .respond(
-                    502,
-                    "Bad Gateway",
-                    version,
-                    "Connections are not available\n",
-                )
+
+            HttpResponse::new(502, "Bad Gateway", version)
+                .add_payload(b"Connections are not available\n")
+                .write_to_stream(stream)
                 .await?;
+
             stream.shutdown().await?;
             NeckError::wrap("Bad Gateway")
         }
@@ -45,9 +43,12 @@ async fn connect_upstream(
                 stream.peer_addr.to_string(),
                 host
             );
-            stream
-                .respond(503, "Service Unavailable", version, &msg)
+
+            HttpResponse::new(503, "Service Unavailable", version)
+                .add_payload(msg.as_bytes())
+                .write_to_stream(stream)
                 .await?;
+
             stream.shutdown().await?;
             NeckError::wrap("Service Unavailable")
         }
@@ -73,8 +74,8 @@ async fn connect_handler(
     );
 
     // Send a 200 Connection Established response to the client to answer the requested CONNECT method.
-    stream
-        .respond(200, "Connection Established", req.get_version(), "")
+    HttpResponse::new(200, "Connection Established", req.get_version())
+        .write_to_stream(&stream)
         .await?;
 
     // Weld the client connection with upstream.
@@ -138,8 +139,8 @@ async fn join_handler(
     ctx: &Arc<NeckServer>,
 ) -> Result<(), Box<dyn Error>> {
     // Respond a with 200 Welcome.
-    stream
-        .respond(200, "Welcome", req.get_version(), "")
+    HttpResponse::new(200, "Welcome", req.get_version())
+        .write_to_stream(&stream)
         .await?;
 
     // Join the manager (ownership for the stream is moved to the manager)
@@ -155,13 +156,15 @@ async fn api_handler(
 ) -> Result<(), Box<dyn Error>> {
     let uri = req.get_uri();
     if uri.eq("/manager/len") && req.get_method().eq("GET") {
-        let payload = ctx.manager.len().await.to_string() + "\n";
-        stream
-            .respond(200, "OK", req.get_version(), &payload)
+        HttpResponse::new(200, "OK", req.get_version())
+            .add_payload(ctx.manager.len().await.to_string().as_bytes())
+            .add_payload(b"\n")
+            .write_to_stream(&stream)
             .await?;
     } else {
-        stream
-            .respond(404, "Not Found", req.get_version(), "Not Found\n")
+        HttpResponse::new(404, "Not Found", req.get_version())
+            .add_payload(b"Not Found\n")
+            .write_to_stream(&stream)
             .await?;
     }
     Ok(())

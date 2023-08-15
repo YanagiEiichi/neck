@@ -44,26 +44,21 @@ where
 }
 
 // Read payload as a Vec<u8>.
-async fn read_payload<T>(
+async fn read_payload<T: AsyncRead + Unpin>(
     stream: &mut BufReader<T>,
     headers: &Headers,
-    buf: &mut Vec<u8>,
-) -> Result<u64, Box<dyn Error>>
-where
-    T: Unpin,
-    T: AsyncRead,
-{
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut buf = Vec::<u8>::new();
     // Get the Content-Length field.
     if let Some(value) = headers.get_header("Content-Length") {
         // Parse it into a integer.
         let len = value.parse::<u64>()?;
         if len > 0 {
             // Read bytes.
-            stream.take(len).read_to_end(buf).await?;
+            stream.take(len).read_to_end(&mut buf).await?;
         }
-        return Ok(len);
     }
-    return Ok(0);
+    return Ok(buf);
 }
 
 pub trait HttpCommon {
@@ -71,21 +66,21 @@ pub trait HttpCommon {
     fn get_headers(&self) -> &Headers;
 
     /// Get the payload.
-    fn get_payload(&self) -> &Vec<u8>;
+    fn get_payload(&self) -> &Option<Vec<u8>>;
 }
 
 #[derive(Debug)]
 pub struct HttpProtocol {
     pub first_line: FirstLine,
     pub headers: Headers,
-    pub payload: Vec<u8>,
+    pub payload: Option<Vec<u8>>,
 }
 
 impl HttpProtocol {
     pub fn new(
         first_line: FirstLine,
         headers: impl Into<Headers>,
-        payload: Vec<u8>,
+        payload: Option<Vec<u8>>,
     ) -> HttpProtocol {
         HttpProtocol {
             first_line,
@@ -101,7 +96,7 @@ impl HttpProtocol {
         let mut pl = Self::read_header_from(stream).await?;
 
         // Read playload
-        read_payload(stream, &pl.headers, &mut pl.payload).await?;
+        pl.payload = Some(read_payload(stream, &pl.headers).await?);
 
         Ok(pl)
     }
@@ -122,24 +117,57 @@ impl HttpProtocol {
         // Create headers (The first line has remove above).
         let headers: Headers = lines.into();
 
-        // Read playload
-        let payload = Vec::new();
-
-        Ok(HttpProtocol::new(first_line, headers, payload))
+        Ok(HttpProtocol::new(first_line, headers, None))
     }
 
     /// Write all data to an AsyncWrite
-    pub async fn write_to<T>(&self, w: &mut T) -> Result<(), Box<dyn Error>>
-    where
-        T: Unpin,
-        T: AsyncWrite,
-    {
+    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
         self.first_line.write_to(w).await?;
-        self.headers.write_to(w).await?;
-        w.write_all(b"\r\n").await?;
-        if !self.payload.is_empty() {
-            w.write_all(&self.payload).await?;
+
+        // Calculate the actual value of Content-Length.
+        match self.payload.as_ref() {
+            Some(payload) => {
+                let mut content_type_sent = false;
+                for h in self.headers.iter() {
+                    // Update flag if Content-Type has sent.
+                    if h.eq_name("Content-Type") {
+                        content_type_sent = true;
+                    }
+
+                    // If Ignore unsafe Content-Length.
+                    // This header will be recalculated set later.
+                    if h.eq_name("Content-Length") {
+                        continue;
+                    }
+
+                    h.write_to(w).await?;
+                }
+
+                // Set the default Content-Type to text/plain.
+                if !content_type_sent {
+                    w.write_all(b"Content-Type: text/plain\r\n").await?;
+                }
+
+                // Write the Content-Length header that is calculated based on the actual payload.
+                w.write_all(format!("Content-Length: {}\r\n", payload.len()).as_bytes())
+                    .await?;
+            }
+            None => {
+                // Pass all headers through.
+                self.headers.write_to(w).await?;
+            }
         }
+
+        // All headers have been sent.
+        w.write_all(b"\r\n").await?;
+
+        // Send the payload if it exists.
+        if let Some(payload) = self.payload.as_ref() {
+            if payload.len() > 0 {
+                w.write_all(payload).await?;
+            }
+        }
+
         Ok(())
     }
 }
@@ -149,7 +177,7 @@ impl HttpCommon for HttpProtocol {
         &self.headers
     }
 
-    fn get_payload(&self) -> &Vec<u8> {
+    fn get_payload(&self) -> &Option<Vec<u8>> {
         &self.payload
     }
 }

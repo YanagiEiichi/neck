@@ -55,24 +55,9 @@ impl NeckStream {
         HttpResponse::read_from(&mut reader).await
     }
 
-    /// Send an HTTP response.
-    pub async fn respond(
-        &self,
-        status: u16,
-        text: &str,
-        version: &str,
-        payload: &str,
-    ) -> Result<(), Box<dyn Error>> {
-        let mut headers = Vec::new();
-        headers.push(String::from("Content-Type: text/plain"));
-        headers.push(format!("Content-Length: {}", payload.as_bytes().len()));
-        HttpProtocol::new(
-            FirstLine::new(version, &status.to_string(), text),
-            headers,
-            payload.as_bytes().to_vec(),
-        )
-        .write_to(&mut *self.writer.lock().await)
-        .await
+    pub async fn write_http_protocol(&self, data: &HttpProtocol) -> Result<(), Box<dyn Error>> {
+        let mut writer = self.writer.lock().await;
+        data.write_to(&mut *writer).await
     }
 
     /// Send an HTTP request.
@@ -83,7 +68,7 @@ impl NeckStream {
         version: &str,
         headers: impl Into<Headers>,
     ) -> Result<(), Box<dyn Error>> {
-        HttpProtocol::new(FirstLine::new(method, uri, version), headers, Vec::new())
+        HttpProtocol::new(FirstLine::new(method, uri, version), headers, None)
             .write_to(&mut *self.writer.lock().await)
             .await
     }
@@ -123,5 +108,11 @@ impl From<TcpStream> for NeckStream {
         let peer_addr = stream.peer_addr().unwrap();
         let local_addr = stream.local_addr().unwrap();
         Self::new(peer_addr, local_addr, stream)
+    }
+}
+
+impl HttpProtocol {
+    pub async fn write_to_stream(&self, stream: &NeckStream) -> Result<(), Box<dyn Error>> {
+        stream.write_http_protocol(&self).await
     }
 }

@@ -14,6 +14,11 @@ pub struct HeaderRow(
 );
 
 impl HeaderRow {
+    /// Creates a new [`HeaderRow`].
+    pub fn new(raw: String, colon: usize) -> Self {
+        Self(raw, colon)
+    }
+
     /// Get header name
     pub fn get_name(&self) -> &str {
         &self.0[..self.1]
@@ -23,6 +28,11 @@ impl HeaderRow {
     pub fn get_value(&self) -> &str {
         // Some spaces may be places following the colon, so `trim_start` is needed here.
         &self.0[self.1 + 1..].trim_start()
+    }
+
+    /// Get header value
+    pub fn set_value(&mut self, value: &str) {
+        self.0 = format!("{}: {}", self.get_name(), value);
     }
 
     // Compare the name (case-insensitive).
@@ -64,14 +74,21 @@ pub struct Headers(Vec<HeaderRow>);
 
 impl Headers {
     /// Get a header value by name (case-insensitive).
+    /// TODO: Rename to get_header_value.
     pub fn get_header(&self, name: &str) -> Option<&str> {
-        self.0.iter().find_map(|l| {
-            if l.eq_name(name) {
-                Some(l.get_value())
-            } else {
-                None
-            }
-        })
+        self.0
+            .iter()
+            .find(|l| l.eq_name(name))
+            .map(|v| v.get_value())
+    }
+
+    /// Set a header value by name (case-insensitive).
+    pub fn set_header(&mut self, name: &str, value: &str) {
+        let found = self.0.iter_mut().find(|l| l.eq_name(name));
+        match found {
+            Some(row) => row.set_value(value),
+            None => self.push(HeaderRow::new(format!("{}: {}", name, value), name.len())),
+        };
     }
 
     /// Remove a header by name (case-insensitive).

@@ -143,7 +143,8 @@ Arguments:
   <ADDR>  Proxy server address
 
 Options:
-  -c, --connections <CONNECTIONS>  The provided connections defaults 100
+  -c, --connections <CONNECTIONS>  The number of maximum provided connections defaults 200
+  -w, --workers <WORKERS>          The number of concurrent workers defaults 8
       --tls                        Connect proxy server using TLS
       --tls-domain <TLS_DOMAIN>    Specify the domain for TLS, using the hostname of addr by default
   -h, --help                       Print help

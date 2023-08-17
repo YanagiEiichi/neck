@@ -4,7 +4,7 @@ use std::{error::Error, fmt::Display};
 pub struct NeckError(String);
 
 impl NeckError {
-    pub fn wrap<T>(message: impl ToString) -> Result<T, Box<dyn Error>> {
+    pub fn wrap<T>(message: impl ToString) -> Result<T, Box<dyn Error + Send + Sync>> {
         Err(Box::new(NeckError(String::from(message.to_string()))))
     }
 }

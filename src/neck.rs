@@ -1,4 +1,4 @@
-use std::{error::Error, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{
     io::{self, split, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader},
@@ -15,12 +15,6 @@ pub struct NeckStream {
     pub writer: Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
     pub reader: Arc<Mutex<BufReader<Box<dyn AsyncRead + Send + Unpin>>>>,
 }
-
-// impl Drop for NeckStream {
-//     fn drop(&mut self) {
-//         println!("Drop {}", self.peer_addr);
-//     }
-// }
 
 impl NeckStream {
     pub fn new<T>(peer_addr: SocketAddr, local_addr: SocketAddr, stream: T) -> Self
@@ -61,7 +55,7 @@ impl NeckStream {
     }
 
     /// Shutdown the connection immediately.
-    pub async fn shutdown(&self) -> Result<(), impl Error> {
+    pub async fn shutdown(&self) -> io::Result<()> {
         self.writer.lock().await.shutdown().await
     }
 }
@@ -75,7 +69,7 @@ impl From<TcpStream> for NeckStream {
 }
 
 impl HttpProtocol {
-    pub async fn write_to_stream(&self, stream: &NeckStream) -> Result<(), Box<dyn Error>> {
+    pub async fn write_to_stream(&self, stream: &NeckStream) -> io::Result<()> {
         let mut writer = stream.writer.lock().await;
         self.write_to(&mut *writer).await.map_err(|e| e.into())
     }
@@ -83,14 +77,14 @@ impl HttpProtocol {
 
 impl HttpRequest {
     /// Read an HTTP request, and wait for an HTTP request to be received completely.
-    pub async fn read_from(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
+    pub async fn read_from(stream: &NeckStream) -> io::Result<HttpRequest> {
         let mut reader = stream.reader.lock().await;
         HttpProtocol::read_from(&mut reader).await.map(|v| v.into())
     }
 
     /// Read an HTTP request (wait for an HTTP request to be received completely).
     /// NOTE: The payload will not be readed.
-    pub async fn read_header_from(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
+    pub async fn read_header_from(stream: &NeckStream) -> io::Result<HttpRequest> {
         let mut reader = stream.reader.lock().await;
         HttpProtocol::read_header_from(&mut reader)
             .await
@@ -100,7 +94,7 @@ impl HttpRequest {
 
 impl HttpResponse {
     /// Read an HTTP response (wait for an HTTP response to be received completely).
-    pub async fn read_from(stream: &NeckStream) -> Result<HttpResponse, Box<dyn Error>> {
+    pub async fn read_from(stream: &NeckStream) -> io::Result<HttpResponse> {
         let mut reader = stream.reader.lock().await;
         HttpProtocol::read_from(&mut reader).await.map(|v| v.into())
     }

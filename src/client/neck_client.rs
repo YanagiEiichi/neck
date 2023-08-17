@@ -1,8 +1,11 @@
-use std::{error::Error, process::exit, sync::Arc};
+use std::{process::exit, sync::Arc};
 
-use tokio::sync::{
-    mpsc::{self, Receiver, Sender},
-    Mutex,
+use tokio::{
+    io,
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        Mutex,
+    },
 };
 
 use crate::neck::NeckStream;
@@ -71,7 +74,7 @@ impl NeckClient {
     }
 
     /// Create a connect from connector.
-    pub async fn connect(&self) -> Result<NeckStream, Box<dyn Error>> {
+    pub async fn connect(&self) -> io::Result<NeckStream> {
         self.connector.connect().await
     }
 

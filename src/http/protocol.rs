@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::error::Error;
 
 use tokio::io::{self, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
@@ -96,7 +95,7 @@ impl HttpProtocol {
             payload,
         }
     }
-    pub async fn read_from<T>(stream: &mut BufReader<T>) -> Result<HttpProtocol, Box<dyn Error>>
+    pub async fn read_from<T>(stream: &mut BufReader<T>) -> io::Result<HttpProtocol>
     where
         T: Unpin,
         T: AsyncRead,
@@ -109,9 +108,7 @@ impl HttpProtocol {
         Ok(pl)
     }
 
-    pub(crate) async fn read_header_from<T>(
-        stream: &mut BufReader<T>,
-    ) -> Result<HttpProtocol, Box<dyn Error>>
+    pub(crate) async fn read_header_from<T>(stream: &mut BufReader<T>) -> io::Result<HttpProtocol>
     where
         T: Unpin,
         T: AsyncRead,

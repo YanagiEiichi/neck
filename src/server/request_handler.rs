@@ -15,7 +15,7 @@ async fn connect_upstream(
     host: &str,
     version: &str,
     ctx: &Arc<NeckServer>,
-) -> Result<NeckStream, Box<dyn Error>> {
+) -> Result<NeckStream, Box<dyn Error + Send + Sync>> {
     match ctx.manager.connect(host.to_string()).await {
         ConnectingResult::Ok(v) => Ok(v),
 
@@ -60,7 +60,7 @@ async fn connect_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     // Attempt to connect upstream server via the proxy connection manager.
     let upstream = connect_upstream(&stream, req.get_uri(), req.get_version(), ctx).await?;
 
@@ -88,7 +88,7 @@ async fn simple_http_proxy_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     // Remove "http://" from left
     let uri = &req.get_uri()[7..];
 
@@ -140,7 +140,7 @@ async fn join_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     // Respond a status with 101 Switching Protocols.
     HttpResponse::new(101, "Switching Protocols", req.get_version())
         .add_header("Connection: Upgrade")
@@ -158,7 +158,7 @@ async fn api_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let uri = req.get_uri();
     if uri.eq("/manager/len") && req.get_method().eq("GET") {
         HttpResponse::new(200, "OK", req.get_version())
@@ -181,10 +181,7 @@ pub async fn request_handler(tcp_stream: TcpStream, ctx: Arc<NeckServer>) {
 
     // Read the first request.
     // NOTE: Do not read payload here, because payload may be a huge stream.
-    let req = match HttpRequest::read_header_from(&stream)
-        .await
-        .map_err(|e| e.to_string())
-    {
+    let req = match HttpRequest::read_header_from(&stream).await {
         Ok(v) => v,
         Err(_) => {
             // Unable to read the HTTP request from the stream.
@@ -206,6 +203,7 @@ pub async fn request_handler(tcp_stream: TcpStream, ctx: Arc<NeckServer>) {
                 .add_payload(format!("The protocol '{}' is not supported.", upgrade).as_bytes())
                 .write_to_stream(&stream)
                 .await
+                .map_err(|e| e.into())
         }
     } else
     // It is a simple HTTP proxy request.

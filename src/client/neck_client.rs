@@ -1,14 +1,11 @@
 use std::{process::exit, sync::Arc};
 
-use tokio::{
-    io,
-    sync::{
-        mpsc::{self, Receiver, Sender},
-        Mutex,
-    },
+use tokio::sync::{
+    mpsc::{self, Receiver, Sender},
+    Mutex,
 };
 
-use crate::neck::NeckStream;
+use crate::{neck::NeckStream, utils::NeckResult};
 
 use super::{
     connector::Connector, start_worker::start_worker, tcp_connector::TcpConnector,
@@ -74,7 +71,7 @@ impl NeckClient {
     }
 
     /// Create a connect from connector.
-    pub async fn connect(&self) -> io::Result<NeckStream> {
+    pub async fn connect(&self) -> NeckResult<NeckStream> {
         self.connector.connect().await
     }
 

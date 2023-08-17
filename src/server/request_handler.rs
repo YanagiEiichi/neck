@@ -1,11 +1,11 @@
-use std::{borrow::Cow, error::Error, sync::Arc};
+use std::{borrow::Cow, sync::Arc};
 
 use tokio::net::TcpStream;
 
 use crate::{
     http::{HttpCommon, HttpRequest, HttpResponse},
     neck::NeckStream,
-    utils::NeckError,
+    utils::{NeckError, NeckResult},
 };
 
 use super::{connection_manager::ConnectingResult, NeckServer};
@@ -15,7 +15,7 @@ async fn connect_upstream(
     host: &str,
     version: &str,
     ctx: &Arc<NeckServer>,
-) -> Result<NeckStream, Box<dyn Error + Send + Sync>> {
+) -> NeckResult<NeckStream> {
     match ctx.manager.connect(host.to_string()).await {
         ConnectingResult::Ok(v) => Ok(v),
 
@@ -60,7 +60,7 @@ async fn connect_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> NeckResult<()> {
     // Attempt to connect upstream server via the proxy connection manager.
     let upstream = connect_upstream(&stream, req.get_uri(), req.get_version(), ctx).await?;
 
@@ -88,7 +88,7 @@ async fn simple_http_proxy_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> NeckResult<()> {
     // Remove "http://" from left
     let uri = &req.get_uri()[7..];
 
@@ -140,7 +140,7 @@ async fn join_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> NeckResult<()> {
     // Respond a status with 101 Switching Protocols.
     HttpResponse::new(101, "Switching Protocols", req.get_version())
         .add_header("Connection: Upgrade")
@@ -158,7 +158,7 @@ async fn api_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> NeckResult<()> {
     let uri = req.get_uri();
     if uri.eq("/manager/len") && req.get_method().eq("GET") {
         HttpResponse::new(200, "OK", req.get_version())

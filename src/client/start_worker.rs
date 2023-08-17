@@ -1,18 +1,16 @@
-use std::{error::Error, ops::Add, sync::Arc, time::Duration};
+use std::{ops::Add, sync::Arc, time::Duration};
 
 use tokio::{io, net::TcpStream, time};
 
 use crate::{
     http::{HttpRequest, HttpResponse},
     neck::NeckStream,
-    utils::NeckError,
+    utils::{NeckError, NeckResult},
 };
 
 use super::{Event::*, NeckClient};
 
-async fn wait_until_http_proxy_connect(
-    stream: &NeckStream,
-) -> Result<HttpRequest, Box<dyn Error + Send + Sync>> {
+async fn wait_until_http_proxy_connect(stream: &NeckStream) -> NeckResult<HttpRequest> {
     // Attempt to read a HTTP request.
     let req = HttpRequest::read_from(stream).await?;
 
@@ -32,7 +30,7 @@ async fn wait_until_http_proxy_connect(
 }
 
 /// Create a connection and try to join the NeckServer.
-async fn connect_and_join(ctx: &NeckClient) -> Result<NeckStream, Box<dyn Error + Send + Sync>> {
+async fn connect_and_join(ctx: &NeckClient) -> NeckResult<NeckStream> {
     // Attempt to connect NeckServer.
     let stream = ctx.connect().await?;
 
@@ -90,7 +88,7 @@ async fn connect_upstream_and_weld(stream: &NeckStream, req: &HttpRequest) -> io
     Ok(())
 }
 
-async fn setup_connection(ctx: &NeckClient) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn setup_connection(ctx: &NeckClient) -> NeckResult<()> {
     let token = ctx.bucket.acquire().await;
 
     // Create a connection and try to join the NeckServer.

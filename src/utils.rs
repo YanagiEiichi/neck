@@ -3,8 +3,12 @@ use std::{error::Error, fmt::Display};
 #[derive(Debug)]
 pub struct NeckError(String);
 
+type BoxedError = Box<dyn Error + Send + Sync>;
+
+pub type NeckResult<T> = Result<T, BoxedError>;
+
 impl NeckError {
-    pub fn wrap<T>(message: impl ToString) -> Result<T, Box<dyn Error + Send + Sync>> {
+    pub fn wrap<T>(message: impl ToString) -> NeckResult<T> {
         Err(Box::new(NeckError(String::from(message.to_string()))))
     }
 }

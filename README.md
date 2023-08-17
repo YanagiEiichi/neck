@@ -123,13 +123,15 @@ Client --> Goal
 ```text
 Start a Neck HTTP proxy server
 
-Usage: neck serve [ADDR]
+Usage: neck serve [OPTIONS] [ADDR]
 
 Arguments:
   [ADDR]  Binding the listening address defaults "0.0.0.0:1081"
 
 Options:
-  -h, --help  Print help
+      --max-workers <MAX_WORKERS>  The maximum allowed number of workers defaults 200
+      --direct                     Proxy directly from the server without creating a worker pool
+  -h, --help                       Print help
 ```
 
 ### Client

@@ -1,14 +1,14 @@
 use std::borrow::Cow;
 use std::error::Error;
 
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{self, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use tokio::io::BufReader;
 
-use super::{FirstLine, HeaderRow, Headers, HttpError};
+use super::{FirstLine, HeaderRow, Headers};
 
 /// Read a group of lines ending with an empty line from a BufReader.
-async fn read_lines<T>(stream: &mut BufReader<T>) -> Result<Vec<String>, Box<dyn Error>>
+async fn read_lines<T>(stream: &mut BufReader<T>) -> io::Result<Vec<String>>
 where
     T: Unpin,
     T: AsyncRead,
@@ -21,7 +21,10 @@ where
 
         // Normally, the `read` method will wait for any bytes received, so zero bytes read indicate an EOF received.
         if stream.read_line(&mut buf).await? == 0 {
-            return HttpError::wrap("Connection closed by peer");
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Connection closed by peer",
+            ));
         }
 
         // The `read_line` retains separator characters such as CR or LF at the end, which should be trimmed.
@@ -48,12 +51,15 @@ where
 async fn read_payload<T: AsyncRead + Unpin>(
     stream: &mut BufReader<T>,
     headers: &Headers,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+) -> io::Result<Vec<u8>> {
     let mut buf = Vec::<u8>::new();
     // Get the Content-Length field.
     if let Some(value) = headers.get_header("Content-Length") {
         // Parse it into a integer.
-        let len = value.parse::<u64>()?;
+        let len = match value.parse::<u64>() {
+            Ok(it) => it,
+            Err(_) => return Err(io::Error::new(io::ErrorKind::Other, "Bad Content-Length")),
+        };
         if len > 0 {
             // Read bytes.
             stream.take(len).read_to_end(&mut buf).await?;
@@ -145,7 +151,7 @@ impl HttpProtocol {
     }
 
     /// Write all data to an AsyncWrite
-    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
+    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> io::Result<()> {
         self.first_line.write_to(w).await?;
 
         match self.payload.as_ref() {

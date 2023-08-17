@@ -77,7 +77,7 @@ impl From<TcpStream> for NeckStream {
 impl HttpProtocol {
     pub async fn write_to_stream(&self, stream: &NeckStream) -> Result<(), Box<dyn Error>> {
         let mut writer = stream.writer.lock().await;
-        self.write_to(&mut *writer).await
+        self.write_to(&mut *writer).await.map_err(|e| e.into())
     }
 }
 

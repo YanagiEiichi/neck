@@ -1,9 +1,6 @@
-use std::{
-    error::Error,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tokio::io::{self, AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug, Clone)]
 pub struct HeaderRow(
@@ -46,7 +43,7 @@ impl HeaderRow {
     }
 
     /// Write the data into an AsyncWrite (a CRLF will be appended at the end).
-    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
+    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> io::Result<()> {
         w.write_all(self.0.as_bytes()).await?;
         w.write_all(b"\r\n").await?;
         Ok(())
@@ -112,7 +109,7 @@ impl Headers {
     }
 
     /// Write the data into an AsyncWrite (a CRLF will be appended at the end of each item).
-    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
+    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> io::Result<()> {
         for i in &self.0 {
             i.write_to(w).await?;
         }

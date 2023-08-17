@@ -1,8 +1,4 @@
-use std::error::Error;
-
-use tokio::io::{AsyncWrite, AsyncWriteExt};
-
-use super::HttpError;
+use tokio::io::{self, AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug)]
 pub struct FirstLine {
@@ -44,7 +40,7 @@ impl FirstLine {
     }
 
     /// Write all data to an AsyncWrite
-    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> Result<(), Box<dyn Error>> {
+    pub async fn write_to<T: AsyncWrite + Unpin>(&self, w: &mut T) -> io::Result<()> {
         w.write_all(self.line.as_bytes()).await?;
         w.write_all(b"\r\n").await?;
         Ok(())
@@ -52,7 +48,7 @@ impl FirstLine {
 }
 
 impl TryFrom<String> for FirstLine {
-    type Error = HttpError;
+    type Error = io::Error;
 
     /// Parse an HTTP first line.
     fn try_from(line: String) -> Result<Self, Self::Error> {
@@ -73,6 +69,6 @@ impl TryFrom<String> for FirstLine {
 
             Some(Self { line, gap1, gap2 })
         })()
-        .ok_or_else(|| HttpError::new("Bad HTTP protocol"))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Bad HTTP protocol"))
     }
 }

@@ -22,6 +22,10 @@ enum Commands {
         /// Binding the listening address defaults "0.0.0.0:1081"
         addr: Option<String>,
 
+        /// The maximum allowed number of workers defaults 200.
+        #[arg(long)]
+        max_workers: Option<u32>,
+
         /// Proxy directly from the server without creating a worker pool.
         #[clap(long, action)]
         direct: bool,
@@ -54,8 +58,13 @@ async fn main() {
     let args = Args::parse();
 
     match args.command {
-        Commands::Serve { addr, direct } => {
-            NeckServer::new(addr, direct).start().await;
+        Commands::Serve {
+            addr,
+            max_workers,
+            direct,
+        } => {
+            // Start server
+            NeckServer::new(addr, direct, max_workers).start().await;
         }
 
         Commands::Join {

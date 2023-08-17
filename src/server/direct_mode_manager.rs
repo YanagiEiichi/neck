@@ -13,7 +13,7 @@ impl ConnectionManager for DirectModeManager {
     fn join(&self, _stream: crate::neck::NeckStream) -> PBFuture<()> {
         // There is nothing to do.
         // Joined connection will lose all references and will be recycled later.
-        Box::pin(async {})
+        Box::pin(async move {})
     }
 
     fn connect(&self, uri: String) -> PBFuture<ConnectingResult> {

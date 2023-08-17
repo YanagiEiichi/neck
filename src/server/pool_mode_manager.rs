@@ -14,13 +14,15 @@ use crate::{
 use super::connection_manager::{ConnectingResult, ConnectionManager, PBFuture};
 
 pub struct PoolModeManager {
+    size: usize,
     storage: Arc<Mutex<HashMap<SocketAddr, NeckStream>>>,
     notify: Arc<Notify>,
 }
 
 impl PoolModeManager {
-    pub fn new() -> PoolModeManager {
+    pub fn new(size: usize) -> PoolModeManager {
         Self {
+            size,
             storage: Arc::new(Mutex::new(HashMap::new())),
             notify: Arc::new(Notify::new()),
         }
@@ -48,6 +50,19 @@ impl PoolModeManager {
             }
         }
     }
+
+    async fn try_insert(&self, stream: NeckStream) -> bool {
+        let mut s = self.storage.lock().await;
+        if s.len() < self.size {
+            // Store the NeckStream into the global pool (ownership has beed moved).
+            let addr = stream.peer_addr.clone();
+            s.insert(addr, stream);
+            true
+        } else {
+            // Return back the ownership of stream.
+            false
+        }
+    }
 }
 
 impl ConnectionManager for PoolModeManager {
@@ -63,19 +78,20 @@ impl ConnectionManager for PoolModeManager {
             let addr = stream.peer_addr.clone();
             let am_reader = stream.reader.clone();
 
-            // Store the NeckStream into the global pool (ownership has beed moved).
-            self.storage.lock().await.insert(addr, stream);
+            if self.try_insert(stream).await {
+                // Otherwise, the stream has joined the pool.
 
-            // Notify someone who is waiting to take a resource.
-            self.notify.notify_one();
+                // Notify someone who is waiting to take a resource.
+                self.notify.notify_one();
 
-            // To detect the EOF of a TcpStream, we must keep reading or peeking at it.
-            // If this connection has been closed by peer and is still stored in the global pool,
-            // we need remove the bad connection from global pool.
-            // Otherwise, it could negatively impact other threads attempting to use the bad connection.
-            let _ = am_reader.lock().await.fill_buf().await;
+                // To detect the EOF of a TcpStream, we must keep reading or peeking at it.
+                // If this connection has been closed by peer and is still stored in the global pool,
+                // we need remove the bad connection from global pool.
+                // Otherwise, it could negatively impact other threads attempting to use the bad connection.
+                let _ = am_reader.lock().await.fill_buf().await;
 
-            self.storage.lock().await.remove(&addr);
+                self.storage.lock().await.remove(&addr);
+            }
         })
     }
 

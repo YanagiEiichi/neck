@@ -23,13 +23,14 @@ fn fix_addr(addr: Option<String>) -> String {
 
 impl NeckServer {
     /// Creates a new [`ServerContext`].
-    pub fn new(addr: Option<String>, direct: bool) -> Self {
+    pub fn new(addr: Option<String>, direct: bool, max_workers: Option<u32>) -> Self {
         Self {
             addr: fix_addr(addr),
             manager: if direct {
                 Box::new(DirectModeManager {})
             } else {
-                Box::new(PoolModeManager::new())
+                // The maximum allowed number of workers defaults 200.
+                Box::new(PoolModeManager::new(max_workers.unwrap_or(200) as usize))
             },
         }
     }

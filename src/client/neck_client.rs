@@ -34,11 +34,11 @@ fn create_connector(
 
 pub struct NeckClient {
     pub addr: String,
-    pub connections: u64,
+    pub workers: u32,
+    pub bucket: TokenBucket,
     connector: Box<dyn Connector>,
     sender: Sender<Event>,
     receiver: Mutex<Receiver<Event>>,
-    pub bucket: TokenBucket,
 }
 
 pub enum Event {
@@ -49,22 +49,24 @@ pub enum Event {
 impl NeckClient {
     pub fn new(
         addr: String,
-        connections: Option<u64>,
+        workers: Option<u32>,
+        connections: Option<u32>,
         tls_enabled: bool,
         tls_domain: Option<String>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<Event>(32);
         Self {
             addr: addr.clone(),
-            // The connections is defaults 100
-            connections: connections.unwrap_or(100),
+            // The number of concurrent workers defaults 8.
+            workers: workers.unwrap_or(8),
             // Create a connector while considering the TLS configuration.
             connector: create_connector(addr, tls_enabled, tls_domain),
             // Store the channel handler.
             sender,
             // The receiver is mutable, so wrap it with a Mutex to ensure the NeckClient remains immutable.
             receiver: Mutex::new(receiver),
-            bucket: TokenBucket::new(200),
+            // The number of maximum provided connections defaults 200
+            bucket: TokenBucket::new(connections.unwrap_or(200) as usize),
         }
     }
 
@@ -83,7 +85,7 @@ impl NeckClient {
         let mut receiver = self.receiver.lock().await;
 
         // Initialize some counters.
-        let mut failed_count = 0u64;
+        let mut failed_count = 0u32;
 
         // Read event from channel.
         while let Some(event) = receiver.recv().await {
@@ -94,7 +96,7 @@ impl NeckClient {
                 Event::Failed => failed_count += 1,
             }
             // If the failed counter exceeds the number of connections, print an error message.
-            if failed_count > self.connections {
+            if failed_count > self.workers {
                 eprintln!("Failed to connect {}", self.addr);
                 // Reset failed counter to debounce the error message printing.
                 failed_count = 0;
@@ -108,7 +110,7 @@ impl NeckClient {
         let shared_ctx = Arc::new(self);
 
         // Create threads for each client connection.
-        for _ in 0..shared_ctx.connections {
+        for _ in 0..shared_ctx.workers {
             tokio::spawn(start_worker(shared_ctx.clone()));
         }
 

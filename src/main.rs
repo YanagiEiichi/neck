@@ -31,9 +31,13 @@ enum Commands {
         /// Proxy server address
         addr: String,
 
-        /// The provided connections defaults 100
+        /// The number of maximum provided connections defaults 200
         #[arg(short, long)]
-        connections: Option<u64>,
+        connections: Option<u32>,
+
+        /// The number of concurrent workers defaults 8.
+        #[arg(short, long)]
+        workers: Option<u32>,
 
         /// Connect proxy server using TLS.
         #[clap(long, action)]
@@ -57,11 +61,12 @@ async fn main() {
         Commands::Join {
             addr,
             connections,
+            workers,
             tls,
             tls_domain,
         } => {
             // Start client
-            NeckClient::new(addr, connections, tls, tls_domain)
+            NeckClient::new(addr, workers, connections, tls, tls_domain)
                 .start()
                 .await;
         }

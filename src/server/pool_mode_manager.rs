@@ -1,6 +1,10 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, ops::Add, sync::Arc, time::Duration};
 
-use tokio::{io::AsyncBufReadExt, sync::Mutex};
+use tokio::{
+    io::AsyncBufReadExt,
+    sync::{Mutex, Notify},
+    time::{timeout_at, Instant},
+};
 
 use crate::{
     http::{HttpCommon, HttpRequest, HttpResponse},
@@ -11,19 +15,38 @@ use super::connection_manager::{ConnectingResult, ConnectionManager, PBFuture};
 
 pub struct PoolModeManager {
     storage: Arc<Mutex<HashMap<SocketAddr, NeckStream>>>,
+    notify: Arc<Notify>,
 }
 
 impl PoolModeManager {
     pub fn new() -> PoolModeManager {
         Self {
             storage: Arc::new(Mutex::new(HashMap::new())),
+            notify: Arc::new(Notify::new()),
         }
     }
 
     async fn take(&self) -> Option<NeckStream> {
-        let mut map = self.storage.lock().await;
-        let key = *map.keys().into_iter().next()?;
-        map.remove(&key)
+        // Declare a deadline.
+        let deadline = Instant::now().add(Duration::from_secs(5));
+        loop {
+            // Try to take a NeckStream from pool.
+            if let result @ Some(_) = {
+                let mut map = self.storage.lock().await;
+                map.keys()
+                    .into_iter()
+                    .next()
+                    .map(|v| *v)
+                    .map_or(None, |k| map.remove(&k))
+            } {
+                // If the NeckStream is take successfully, return it directly.
+                return result;
+            }
+            // Otherwise, wait for a notification to retry it, and if the timeout occurs, return None.
+            if timeout_at(deadline, self.notify.notified()).await.is_err() {
+                return None;
+            }
+        }
     }
 }
 
@@ -42,6 +65,9 @@ impl ConnectionManager for PoolModeManager {
 
             // Store the NeckStream into the global pool (ownership has beed moved).
             self.storage.lock().await.insert(addr, stream);
+
+            // Notify someone who is waiting to take a resource.
+            self.notify.notify_one();
 
             // To detect the EOF of a TcpStream, we must keep reading or peeking at it.
             // If this connection has been closed by peer and is still stored in the global pool,

@@ -7,7 +7,10 @@ use tokio::sync::{
 
 use crate::neck::NeckStream;
 
-use super::{connector::Connector, start_worker::start_worker, tcp_connector::TcpConnector};
+use super::{
+    connector::Connector, start_worker::start_worker, tcp_connector::TcpConnector,
+    token_bucket::TokenBucket,
+};
 
 #[cfg(feature = "tls")]
 use super::tls_connector::TlsConnector;
@@ -35,9 +38,10 @@ pub struct NeckClient {
     connector: Box<dyn Connector>,
     sender: Sender<Event>,
     receiver: Mutex<Receiver<Event>>,
+    pub bucket: TokenBucket,
 }
 
-enum Event {
+pub enum Event {
     Joined,
     Failed,
 }
@@ -60,6 +64,7 @@ impl NeckClient {
             sender,
             // The receiver is mutable, so wrap it with a Mutex to ensure the NeckClient remains immutable.
             receiver: Mutex::new(receiver),
+            bucket: TokenBucket::new(200),
         }
     }
 
@@ -68,14 +73,9 @@ impl NeckClient {
         self.connector.connect().await
     }
 
-    /// Fire a joind event.
-    pub async fn fire_joined_event(&self) {
-        let _ = self.sender.send(Event::Joined).await;
-    }
-
-    /// Fire a failed event.
-    pub async fn fire_failed_event(&self) {
-        let _ = self.sender.send(Event::Failed).await;
+    /// Dispatch an event.
+    pub async fn dispatch_event(&self, event: Event) {
+        let _ = self.sender.send(event).await;
     }
 
     /// Wait and process events.

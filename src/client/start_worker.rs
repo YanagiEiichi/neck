@@ -8,7 +8,7 @@ use crate::{
     utils::NeckError,
 };
 
-use super::NeckClient;
+use super::{Event::*, NeckClient};
 
 async fn wait_until_http_proxy_connect(stream: &NeckStream) -> Result<HttpRequest, Box<dyn Error>> {
     // Attempt to read a HTTP request.
@@ -47,6 +47,10 @@ async fn connect_and_join(ctx: &NeckClient) -> Result<NeckStream, Box<dyn Error>
 
     // Return the stream object if a 200 status code received.
     if res.get_status() == 101 {
+        // Tell master, this connection has joined.
+        ctx.dispatch_event(Joined).await;
+
+        // Return the connected stream.
         return Ok(stream);
     }
 
@@ -54,16 +58,10 @@ async fn connect_and_join(ctx: &NeckClient) -> Result<NeckStream, Box<dyn Error>
     NeckError::wrap(format!("Failed to join, get status {}", res.get_status()))
 }
 
-async fn setup_connection(ctx: &NeckClient) -> Result<(), Box<dyn Error>> {
-    // Create a connection and try to join the NeckServer.
-    let stream = connect_and_join(ctx).await?;
-
-    // Update counter.
-    ctx.fire_joined_event().await;
-
-    // Wait for any received CONNECT requests.
-    let req = wait_until_http_proxy_connect(&stream).await?;
-
+async fn connect_upstream_and_weld(
+    stream: &NeckStream,
+    req: &HttpRequest,
+) -> Result<(), Box<dyn Error>> {
     // Attempt to connect the upstream server.
     match TcpStream::connect(req.get_uri()).await {
         // If the connection is established successfully.
@@ -75,9 +73,8 @@ async fn setup_connection(ctx: &NeckClient) -> Result<(), Box<dyn Error>> {
                 .write_to_stream(&stream)
                 .await?;
 
-            // Weld the client connection with upstream.
+            // Weld stream and upstream toggle.
             stream.weld(&NeckStream::from(upstream)).await;
-
             Ok(())
         }
         // Cannot connect to upstream server.
@@ -94,6 +91,30 @@ async fn setup_connection(ctx: &NeckClient) -> Result<(), Box<dyn Error>> {
             NeckError::wrap(format!("Failed to connect {}", req.get_uri()))
         }
     }
+}
+
+async fn setup_connection(ctx: &NeckClient) -> Result<(), Box<dyn Error>> {
+    let token = ctx.bucket.acquire().await;
+
+    // Create a connection and try to join the NeckServer.
+    let stream = connect_and_join(ctx).await?;
+
+    // Wait for any received CONNECT requests.
+    let req = wait_until_http_proxy_connect(&stream).await?;
+
+    // If a CONNECT request is received, spawn a new asynchronous routine to handle subsequent matters.
+    // The current routine should be released to handle the next requests.
+    tokio::spawn(async move {
+        // Attempt to connect the upstream server and weld, some io exceptions will be ignored here.
+        if let Err(_) = connect_upstream_and_weld(&stream, &req).await {
+            // There is nothing to handle here, as the above function has taken care of everything.
+        }
+
+        // The token will be held until this routine is complete, therefore drop it manually at this point.
+        drop(token);
+    });
+
+    Ok(())
 }
 
 pub async fn start_worker(ctx: Arc<NeckClient>) {
@@ -113,7 +134,7 @@ pub async fn start_worker(ctx: Arc<NeckClient>) {
         };
         // If the failure counter is not zero, sleep for a few seconds (following exponential backoff).
         if failures > 0 {
-            ctx.fire_failed_event().await;
+            ctx.dispatch_event(Failed).await;
             time::sleep(Duration::from_secs(1 << (failures - 1))).await;
         }
     }

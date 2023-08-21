@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use tokio::io::{self, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use tokio::io::BufReader;
 
@@ -18,8 +18,15 @@ async fn read_payload<T: AsyncRead + Unpin>(
         // Parse it into a integer.
         let len = match value.parse::<u64>() {
             Ok(it) => it,
-            Err(_) => return Err(io::Error::new(io::ErrorKind::Other, "Bad Content-Length")),
+            Err(_) => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Bad Content-Length",
+            ))?,
         };
+        // Check body size limit.
+        if len > 16 * 1024u64 {
+            Err(io::Error::new(io::ErrorKind::OutOfMemory, "Body too long"))?
+        }
         if len > 0 {
             // Read bytes.
             stream.take(len).read_to_end(&mut buf).await?;
@@ -56,11 +63,9 @@ impl HttpProtocol {
             payload,
         }
     }
-    pub async fn read_from<T>(stream: &mut BufReader<T>) -> io::Result<HttpProtocol>
-    where
-        T: Unpin,
-        T: AsyncRead,
-    {
+    pub async fn read_from<T: AsyncRead + Unpin>(
+        stream: &mut BufReader<T>,
+    ) -> io::Result<HttpProtocol> {
         let mut pl = Self::read_header_from(stream).await?;
 
         // Read playload
@@ -69,13 +74,14 @@ impl HttpProtocol {
         Ok(pl)
     }
 
-    pub(crate) async fn read_header_from<T>(stream: &mut BufReader<T>) -> io::Result<HttpProtocol>
-    where
-        T: Unpin,
-        T: AsyncRead,
-    {
+    pub(crate) async fn read_header_from<T: AsyncRead + Unpin>(
+        stream: &mut BufReader<T>,
+    ) -> io::Result<HttpProtocol> {
+        // Maximun allowed size for an HTTP header.
+        let mut budget = 16 * 1024usize;
+
         // Read HTTP header lines.
-        let mut lines = read_lines(stream).await?;
+        let mut lines = read_lines(stream, &mut budget).await?;
 
         // Try to parse HTTP first line.
         let first_line: FirstLine = lines.remove(0).try_into()?;

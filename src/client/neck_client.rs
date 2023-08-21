@@ -8,7 +8,7 @@ use tokio::sync::{
 use crate::{neck::NeckStream, utils::NeckResult};
 
 use super::{
-    connector::Connector, neck_addr::NeckAddr, start_worker::start_worker,
+    connector::Connector, neck_url::NeckUrl, start_worker::start_worker,
     tcp_connector::TcpConnector, token_bucket::TokenBucket,
 };
 
@@ -16,25 +16,25 @@ use super::{
 use super::tls_connector::TlsConnector;
 
 fn create_connector(
-    addr: &NeckAddr,
+    url: &NeckUrl,
     #[allow(unused_variables)] tls_domain: Option<String>,
 ) -> Box<dyn Connector> {
-    let tls = addr.get_proto().eq_ignore_ascii_case("https");
+    let tls = url.is_https();
 
     #[cfg(feature = "tls")]
     if tls {
-        return Box::new(TlsConnector::new(addr, tls_domain));
+        return Box::new(TlsConnector::new(url, tls_domain));
     }
     // If tls is enabled, but the tls feature is not enable, print an error message and exit the process.
     if tls {
-        eprintln!("The '--tls' flag is not supported.");
+        eprintln!("The 'https:' is not supported.");
         exit(1);
     }
-    Box::new(TcpConnector::new(addr))
+    Box::new(TcpConnector::new(url))
 }
 
 pub struct NeckClient {
-    pub addr: NeckAddr,
+    pub url: NeckUrl,
     pub workers: u32,
     pub bucket: TokenBucket,
     connector: Box<dyn Connector>,
@@ -49,17 +49,17 @@ pub enum Event {
 
 impl NeckClient {
     pub fn new(
-        addr: String,
+        url: String,
         workers: Option<u32>,
         connections: Option<u32>,
         tls_domain: Option<String>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<Event>(32);
 
-        let a = addr.into();
+        let a = url.into();
         let connector = create_connector(&a, tls_domain);
         Self {
-            addr: a,
+            url: a,
             // The number of concurrent workers defaults 8.
             workers: workers.unwrap_or(8),
             // Create a connector while considering the TLS configuration.
@@ -100,7 +100,7 @@ impl NeckClient {
             }
             // If the failed counter exceeds the number of connections, print an error message.
             if failed_count > self.workers {
-                eprintln!("Failed to connect {}", self.addr.get_host());
+                eprintln!("Failed to connect {}", self.url.get_addr());
                 // Reset failed counter to debounce the error message printing.
                 failed_count = 0;
             }

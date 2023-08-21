@@ -35,11 +35,11 @@ async fn connect_and_join(ctx: &NeckClient) -> NeckResult<NeckStream> {
     let stream = ctx.connect().await?;
 
     // Attempt to send a request with Upgrade: neck.
-    HttpRequest::new("GET", ctx.addr.get_tail(), "HTTP/1.1")
-        .add_header_kv("Host", &ctx.addr.get_host())
+    HttpRequest::new("GET", ctx.url.get_tail(), "HTTP/1.1")
+        .add_header_kv("Host", &ctx.url.get_host())
         .add_header("Connection: Upgrade")
         .add_header("Upgrade: neck")
-        .add_header_option(ctx.addr.get_authorization())
+        .add_header_option(ctx.url.get_authorization())
         .write_to_stream(&stream)
         .await?;
 

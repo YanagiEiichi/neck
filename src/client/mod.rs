@@ -1,6 +1,6 @@
 mod connector;
-mod neck_addr;
 mod neck_client;
+mod neck_url;
 mod start_worker;
 mod tcp_connector;
 mod token_bucket;

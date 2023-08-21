@@ -1,22 +1,22 @@
 use tokio::net::TcpStream;
 
 use super::connector::{ConnResult, Connector};
-use super::neck_addr::NeckAddr;
+use super::neck_url::NeckUrl;
 
 pub struct TcpConnector {
-    host: String,
+    addr: String,
 }
 
 impl TcpConnector {
-    pub fn new(addr: &NeckAddr) -> Self {
+    pub fn new(url: &NeckUrl) -> Self {
         Self {
-            host: addr.get_host().to_string(),
+            addr: url.get_addr().into(),
         }
     }
 }
 
 impl Connector for TcpConnector {
     fn connect(&self) -> ConnResult<'_> {
-        Box::pin(async { Ok(TcpStream::connect(&self.host).await?.into()) })
+        Box::pin(async { Ok(TcpStream::connect(&self.addr).await?.into()) })
     }
 }

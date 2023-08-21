@@ -4,26 +4,23 @@ use crate::neck::NeckStream;
 
 use super::{
     connector::{ConnResult, Connector},
-    neck_addr::NeckAddr,
+    neck_url::NeckUrl,
 };
 
 pub struct TlsConnector {
-    host: String,
+    addr: String,
     domain: String,
     connector: tokio_native_tls::TlsConnector,
 }
 
 impl TlsConnector {
-    pub fn new(addr: &NeckAddr, tls_domain: Option<String>) -> Self {
-        // If tls_domain is not set, get the hostname from addr.
-        let domain =
-            tls_domain.unwrap_or_else(|| addr.get_host().split(':').next().unwrap().to_string());
-        // Initialize the TlsConnector
-        let connector = native_tls::TlsConnector::new().unwrap().into();
+    pub fn new(url: &NeckUrl, tls_domain: Option<String>) -> Self {
         Self {
-            host: addr.get_host().to_string(),
-            domain,
-            connector,
+            addr: url.get_addr().into(),
+            // If tls_domain is not set, get the hostname from URL.
+            domain: tls_domain.unwrap_or_else(|| url.get_hostname().into()),
+            // Initialize the TlsConnector
+            connector: native_tls::TlsConnector::new().unwrap().into(),
         }
     }
 }
@@ -32,7 +29,7 @@ impl Connector for TlsConnector {
     fn connect(&self) -> ConnResult<'_> {
         Box::pin(async {
             // Attempt to connect Neck Server.
-            let tcp_stream = TcpStream::connect(&self.host).await?;
+            let tcp_stream = TcpStream::connect(&self.addr).await?;
 
             // Get addresses pairs.
             let peer_addr = tcp_stream.peer_addr().unwrap();

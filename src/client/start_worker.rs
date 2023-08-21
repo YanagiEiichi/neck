@@ -11,22 +11,30 @@ use crate::{
 use super::{Event::*, NeckClient};
 
 async fn wait_until_http_proxy_connect(stream: &NeckStream) -> NeckResult<HttpRequest> {
-    // Attempt to read a HTTP request.
-    let req = HttpRequest::read_from(stream).await?;
+    loop {
+        // Wait for an HTTP request.
+        let req = HttpRequest::read_from(stream).await?;
 
-    // If method is "CONNECT" return the `req` directly.
-    if req.get_method().eq("CONNECT") {
-        return Ok(req);
+        match req.get_method() {
+            // If method is "CONNECT" return the `req` directly.
+            "CONNECT" => return Ok(req),
+
+            // If method is "PING", respond with a 200 status code, and wait for the next request.
+            "PING" => {
+                HttpResponse::new(204, "PONG", req.get_version())
+                    .write_to_stream(stream)
+                    .await?;
+            }
+
+            // Otherwise, respond with a 405 status code, and wait for the next request.
+            _ => {
+                HttpResponse::new(405, "Method Not Allowed", req.get_version())
+                    .add_payload(format!("Method '{}' not allowed\n", req.get_method()).as_bytes())
+                    .write_to_stream(stream)
+                    .await?;
+            }
+        }
     }
-
-    // Otherwise, respond with a 405 status code.
-    HttpResponse::new(405, "Method Not Allowed", req.get_version())
-        .add_payload(format!("Method '{}' not allowed\n", req.get_method()).as_bytes())
-        .write_to_stream(stream)
-        .await?;
-
-    // And return a standard error object.
-    NeckError::wrap(format!("Bad HTTP method {}", req.get_method()))
 }
 
 /// Create a connection and try to join the NeckServer.

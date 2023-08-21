@@ -43,10 +43,6 @@ enum Commands {
         #[arg(short, long)]
         workers: Option<u32>,
 
-        /// Connect proxy server using TLS.
-        #[clap(long, action)]
-        tls: bool,
-
         /// Specify the domain for TLS, using the hostname of addr by default.
         #[arg(long)]
         tls_domain: Option<String>,
@@ -71,11 +67,10 @@ async fn main() {
             addr,
             connections,
             workers,
-            tls,
             tls_domain,
         } => {
             // Start client
-            NeckClient::new(addr, workers, connections, tls, tls_domain)
+            NeckClient::new(addr, workers, connections, tls_domain)
                 .start()
                 .await;
         }

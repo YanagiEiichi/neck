@@ -11,6 +11,7 @@ description = "A specialized HTTP proxy server used to traverse unidirectional n
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+base64 = "0.21.2"
 clap = { version = "4.3.19", features = ["derive"] }
 native-tls = { version = "0.2.11", optional = true, features = ["vendored"] }
 tokio = { version = "1.29.1", features = ["full"] }
@@ -18,4 +19,4 @@ tokio-native-tls = { version = "0.3.1", optional = true }
 
 [features]
 default = []
-tls = [ "native-tls", "tokio-native-tls" ]
+tls = ["native-tls", "tokio-native-tls"]

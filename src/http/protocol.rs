@@ -104,6 +104,14 @@ impl HttpProtocol {
         self
     }
 
+    /// Add a request header with Option<String>.
+    pub(crate) fn add_header_option(&mut self, option: &Option<String>) -> &Self {
+        if let Some(kv) = option {
+            self.headers.push(kv.to_string().into());
+        }
+        self
+    }
+
     /// Push data to payload.
     pub fn add_payload(&mut self, bytes: &[u8]) -> &mut Self {
         if let Some(payload) = self.payload.as_mut() {

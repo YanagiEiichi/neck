@@ -8,24 +8,25 @@ use tokio::sync::{
 use crate::{neck::NeckStream, utils::NeckResult};
 
 use super::{
-    connector::Connector, start_worker::start_worker, tcp_connector::TcpConnector,
-    token_bucket::TokenBucket,
+    connector::Connector, neck_addr::NeckAddr, start_worker::start_worker,
+    tcp_connector::TcpConnector, token_bucket::TokenBucket,
 };
 
 #[cfg(feature = "tls")]
 use super::tls_connector::TlsConnector;
 
 fn create_connector(
-    addr: String,
-    tls_enabled: bool,
+    addr: &NeckAddr,
     #[allow(unused_variables)] tls_domain: Option<String>,
 ) -> Box<dyn Connector> {
+    let tls = addr.get_proto().eq_ignore_ascii_case("https");
+
     #[cfg(feature = "tls")]
-    if tls_enabled {
+    if tls {
         return Box::new(TlsConnector::new(addr, tls_domain));
     }
     // If tls is enabled, but the tls feature is not enable, print an error message and exit the process.
-    if tls_enabled {
+    if tls {
         eprintln!("The '--tls' flag is not supported.");
         exit(1);
     }
@@ -33,7 +34,7 @@ fn create_connector(
 }
 
 pub struct NeckClient {
-    pub addr: String,
+    pub addr: NeckAddr,
     pub workers: u32,
     pub bucket: TokenBucket,
     connector: Box<dyn Connector>,
@@ -51,16 +52,18 @@ impl NeckClient {
         addr: String,
         workers: Option<u32>,
         connections: Option<u32>,
-        tls_enabled: bool,
         tls_domain: Option<String>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<Event>(32);
+
+        let a = addr.into();
+        let connector = create_connector(&a, tls_domain);
         Self {
-            addr: addr.clone(),
+            addr: a,
             // The number of concurrent workers defaults 8.
             workers: workers.unwrap_or(8),
             // Create a connector while considering the TLS configuration.
-            connector: create_connector(addr, tls_enabled, tls_domain),
+            connector,
             // Store the channel handler.
             sender,
             // The receiver is mutable, so wrap it with a Mutex to ensure the NeckClient remains immutable.
@@ -97,7 +100,7 @@ impl NeckClient {
             }
             // If the failed counter exceeds the number of connections, print an error message.
             if failed_count > self.workers {
-                eprintln!("Failed to connect {}", self.addr);
+                eprintln!("Failed to connect {}", self.addr.get_host());
                 // Reset failed counter to debounce the error message printing.
                 failed_count = 0;
             }

@@ -1,4 +1,5 @@
 mod connector;
+mod neck_addr;
 mod neck_client;
 mod start_worker;
 mod tcp_connector;

@@ -2,7 +2,7 @@ use std::{collections::HashMap, net::SocketAddr, ops::Add, sync::Arc, time::Dura
 
 use rand::Rng;
 use tokio::{
-    io::AsyncBufReadExt,
+    io::{self, AsyncBufReadExt},
     sync::{Mutex, Notify},
     time::{timeout, timeout_at, Instant},
 };
@@ -123,7 +123,7 @@ impl PoolModeManager {
 
             // Execute an HTTP health check.
             // If it is failed, stop the health check loop immediately.
-            if let Err(_) = send_ping_and_receive_pong(&stream).await {
+            if let Err(_) = send_ping_and_assert_pong(&stream).await {
                 // In this case, the `stream` will not be inserted back into the pool.
                 // While this stack is exited, the `stream` will be dropped.
                 break;
@@ -169,30 +169,14 @@ impl ConnectionManager for PoolModeManager {
                 // If the pool is empty, retrying is pointless.
                 let stream = match self.take().await {
                     Some(k) => k,
-                    None => {
-                        break;
-                    }
+                    None => break,
                 };
 
-                // Send the PROXY request to upstream.
-                // This operation can be retryed.
-                if HttpRequest::new("CONNECT", &uri, "HTTP/1.1")
-                    .add_header_kv("Host", &stream.peer_addr.to_string())
-                    .write_to_stream(&stream)
-                    .await
-                    .is_err()
-                {
-                    continue;
-                }
-
-                // Read the first response from upstream.
-                // This operation can be retryed.
-                // let first_response = first_response.lock().await;
-                let res = match HttpResponse::read_from(&stream).await {
-                    Ok(res) => res,
-                    Err(_) => {
-                        continue;
-                    }
+                // Send a CONNECT request and receive an HTTP response.
+                let res = match send_connect_and_receive_response(&uri, &stream).await {
+                    Ok(r) => r,
+                    // This operation can be retried.
+                    Err(_) => continue,
                 };
 
                 // Got a non-200 status, this means proxy server cannot process this request, retrying is pointless.
@@ -215,7 +199,23 @@ impl ConnectionManager for PoolModeManager {
     }
 }
 
-async fn send_ping_and_receive_pong(stream: &NeckStream) -> NeckResult<()> {
+/// Send a CONNECT request and receive an HTTP response.
+async fn send_connect_and_receive_response(
+    uri: &String,
+    stream: &NeckStream,
+) -> io::Result<HttpResponse> {
+    // Send CONNECT reqeust.
+    HttpRequest::new("CONNECT", uri, "HTTP/1.1")
+        .add_header_kv("Host", &stream.peer_addr.to_string())
+        .write_to_stream(stream)
+        .await?;
+
+    // Receive an HTTP response.
+    Ok(HttpResponse::read_from(stream).await?)
+}
+
+/// Send a PING request and assert a PONG response.
+async fn send_ping_and_assert_pong(stream: &NeckStream) -> NeckResult<()> {
     // Send PING request.
     HttpRequest::new("PING", "*", "HTTP/1.1")
         .write_to_stream(&stream)

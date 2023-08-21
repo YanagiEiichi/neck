@@ -3,6 +3,7 @@ mod headers;
 mod protocol;
 mod request;
 mod response;
+mod utils;
 
 mod tests;
 

@@ -139,15 +139,14 @@ Options:
 ```text
 Create some worker connections and join the pool of the server
 
-Usage: neck join [OPTIONS] <ADDR>
+Usage: neck join [OPTIONS] <URL>
 
 Arguments:
-  <ADDR>  Proxy server address
+  <URL>  Proxy server URL
 
 Options:
   -c, --connections <CONNECTIONS>  The number of maximum provided connections defaults 200
   -w, --workers <WORKERS>          The number of concurrent workers defaults 8
-      --tls                        Connect proxy server using TLS
       --tls-domain <TLS_DOMAIN>    Specify the domain for TLS, using the hostname of addr by default
   -h, --help                       Print help
 ```

@@ -1,6 +1,10 @@
 use std::{ops::Add, sync::Arc, time::Duration};
 
-use tokio::{io, net::TcpStream, time};
+use tokio::{
+    io,
+    net::TcpStream,
+    time::{self, timeout},
+};
 
 use crate::{
     http::{HttpRequest, HttpResponse},
@@ -12,8 +16,10 @@ use super::{Event::*, NeckClient};
 
 async fn wait_until_http_proxy_connect(stream: &NeckStream) -> NeckResult<HttpRequest> {
     loop {
-        // Wait for an HTTP request.
-        let req = HttpRequest::read_from(stream).await?;
+        // Wait for an HTTP request with a timeout setting.
+        // Normally, the Neck server will constantly sends out PING requests to all workers,
+        // so this timeout event is never triggered.
+        let req = timeout(Duration::from_secs(180), HttpRequest::read_from(stream)).await??;
 
         match req.get_method() {
             // If method is "CONNECT" return the `req` directly.

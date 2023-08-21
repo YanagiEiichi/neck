@@ -14,7 +14,7 @@ async fn read_payload<T: AsyncRead + Unpin>(
 ) -> io::Result<Vec<u8>> {
     let mut buf = Vec::<u8>::new();
     // Get the Content-Length field.
-    if let Some(value) = headers.get_header("Content-Length") {
+    if let Some(value) = headers.get_header_value("Content-Length") {
         // Parse it into a integer.
         let len = match value.parse::<u64>() {
             Ok(it) => it,

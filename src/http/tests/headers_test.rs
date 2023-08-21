@@ -9,15 +9,15 @@ fn test_collect() {
     let mut headers: Headers = vec!["a: 1", "b: 2"].iter().map(|s| s.to_string()).collect();
 
     assert_eq!(headers.len(), 2);
-    assert_eq!(headers.get_header("a"), Some("1"));
-    assert_eq!(headers.get_header("b"), Some("2"));
-    assert_eq!(headers.get_header("c"), None);
+    assert_eq!(headers.get_header_value("a"), Some("1"));
+    assert_eq!(headers.get_header_value("b"), Some("2"));
+    assert_eq!(headers.get_header_value("c"), None);
 
     assert_eq!(
         {
             let s = String::from("a");
             let k = s.as_str();
-            headers.get_header(k)
+            headers.get_header_value(k)
         },
         Some("1")
     );
@@ -25,8 +25,8 @@ fn test_collect() {
     assert_eq!(headers.remove("b"), Some("b: 2".to_string().into()));
 
     assert_eq!(headers.len(), 1);
-    assert_eq!(headers.get_header("a"), Some("1"));
-    assert_eq!(headers.get_header("b"), None);
+    assert_eq!(headers.get_header_value("a"), Some("1"));
+    assert_eq!(headers.get_header_value("b"), None);
 }
 
 #[tokio::test]

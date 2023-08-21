@@ -195,7 +195,7 @@ pub async fn request_handler(tcp_stream: TcpStream, ctx: Arc<NeckServer>) {
         connect_handler(stream, &req, &ctx).await
     } else
     // For HTTP Upgrade.
-    if let Some(upgrade) = req.headers.get_header("Upgrade") {
+    if let Some(upgrade) = req.headers.get_header_value("Upgrade") {
         if upgrade.eq("neck") {
             join_handler(stream, &req, &ctx).await
         } else {

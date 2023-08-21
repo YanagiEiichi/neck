@@ -83,8 +83,7 @@ pub struct Headers(Vec<HeaderRow>);
 
 impl Headers {
     /// Get a header value by name (case-insensitive).
-    /// TODO: Rename to get_header_value.
-    pub fn get_header(&self, name: &str) -> Option<&str> {
+    pub fn get_header_value(&self, name: &str) -> Option<&str> {
         self.0
             .iter()
             .find(|l| l.eq_name(name))

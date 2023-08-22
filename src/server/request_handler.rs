@@ -1,10 +1,11 @@
 use std::{borrow::Cow, sync::Arc};
 
-use tokio::net::TcpStream;
+use tokio::{io::AsyncBufReadExt, net::TcpStream};
 
 use crate::{
     http::{HttpCommon, HttpRequest, HttpResponse},
     neck::NeckStream,
+    socks5::{ClientGreeting, ServerChoice, Sock5Connection},
     utils::{NeckError, NeckResult},
 };
 
@@ -175,20 +176,18 @@ async fn api_handler(
     Ok(())
 }
 
-pub async fn request_handler(tcp_stream: TcpStream, ctx: Arc<NeckServer>) {
-    // Wrap the raw TcpStream with a NeckStream.
-    let stream = NeckStream::from(tcp_stream);
+pub async fn is_socks5(stream: &NeckStream) -> bool {
+    // Wait and peek the first buffer to check if the first byte is 5u8.
+    match stream.reader.lock().await.fill_buf().await {
+        Ok(v) => v.first().map_or(false, |x| *x == 5),
+        Err(_) => false,
+    }
+}
 
+async fn http_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResult<()> {
     // Read the first request.
     // NOTE: Do not read payload here, because payload may be a huge stream.
-    let req = match HttpRequest::read_header_from(&stream).await {
-        Ok(v) => v,
-        Err(_) => {
-            // Unable to read the HTTP request from the stream.
-            // Exiting the thread early to terminate the connection (NeckStream will be Drop).
-            return;
-        }
-    };
+    let req = HttpRequest::read_header_from(&stream).await?;
 
     // Dispatch to different handlers.
     if let "CONNECT" = req.get_method() {
@@ -214,11 +213,81 @@ pub async fn request_handler(tcp_stream: TcpStream, ctx: Arc<NeckServer>) {
     else {
         api_handler(stream, &req, &ctx).await
     }
-    // Error handler.
+}
+
+async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResult<()> {
+    let addr = read_sock5_request(&stream).await?;
+
+    match ctx.manager.connect(addr.clone()).await {
+        ConnectingResult::Ok(upstream) => {
+            println!(
+                "[{}] Connect to {} for {} [socks5]",
+                stream.peer_addr.to_string(),
+                upstream.peer_addr.to_string(),
+                addr
+            );
+            Sock5Connection::new(0).write_to_stream(&stream).await?;
+
+            // Weld the client connection with upstream.
+            stream.weld(&upstream).await;
+        }
+        ConnectingResult::BadGateway() => {
+            println!(
+                "[{}] No available connections for {}",
+                stream.peer_addr.to_string(),
+                addr
+            );
+            Sock5Connection::new(1).write_to_stream(&stream).await?;
+        }
+        ConnectingResult::ServiceUnavailable(_) => {
+            println!(
+                "[{}] Failed to connect {}",
+                stream.peer_addr.to_string(),
+                addr
+            );
+            Sock5Connection::new(1).write_to_stream(&stream).await?;
+        }
+    };
+
+    Ok(())
+}
+
+async fn read_sock5_request(stream: &NeckStream) -> NeckResult<String> {
+    let mut reader = stream.reader.lock().await;
+    let mut writer = stream.writer.lock().await;
+
+    let hello = ClientGreeting::read_from(&mut reader).await?;
+
+    ServerChoice::new(hello.ver, 0)
+        .write_to(&mut *writer)
+        .await?;
+
+    let req = Sock5Connection::read_from(&mut reader).await?;
+    // println!("{:#?}", req);
+
+    if req.action != 1 {
+        Sock5Connection::new(7).write_to_stream(stream).await?;
+        NeckError::wrap("Unsupported socks5 cmd")?
+    }
+
+    Ok(req.to_addr())
+}
+
+pub async fn request_handler(tcp_stream: TcpStream, ctx: Arc<NeckServer>) {
+    // Wrap the raw TcpStream with a NeckStream.
+    let stream = NeckStream::from(tcp_stream);
+
+    // Detect the protocol, and dispatch to the corresponding handler.
+    if is_socks5(&stream).await {
+        sock5_handler(stream, ctx).await
+    } else {
+        http_handler(stream, ctx).await
+    }
+    // Global error handler.
     .unwrap_or_else(
         #[allow(unused_variables)]
         |e| {
             // println!("{:#?}", e);
         },
-    )
+    );
 }

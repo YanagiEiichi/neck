@@ -7,7 +7,10 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::http::{HttpProtocol, HttpRequest, HttpResponse};
+use crate::{
+    http::{HttpProtocol, HttpRequest, HttpResponse},
+    socks5::Sock5Connection,
+};
 
 pub struct NeckStream {
     pub peer_addr: SocketAddr,
@@ -97,5 +100,12 @@ impl HttpResponse {
     pub async fn read_from(stream: &NeckStream) -> io::Result<HttpResponse> {
         let mut reader = stream.reader.lock().await;
         HttpProtocol::read_from(&mut reader).await.map(|v| v.into())
+    }
+}
+
+impl Sock5Connection {
+    pub async fn write_to_stream(&self, stream: &NeckStream) -> io::Result<()> {
+        let mut writer = stream.writer.lock().await;
+        self.write_to(&mut *writer).await.map_err(|e| e.into())
     }
 }

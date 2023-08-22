@@ -14,10 +14,16 @@ pub async fn api_handler(
     ctx: &Arc<NeckServer>,
 ) -> NeckResult<()> {
     let uri = req.get_uri();
-    if uri.eq("/manager/len") && req.get_method().eq("GET") {
+    if uri.eq("/api/len") && req.get_method().eq("GET") {
         HttpResponse::new(200, "OK", req.get_version())
             .add_payload(ctx.manager.len().await.to_string().as_bytes())
             .add_payload(b"\n")
+            .write_to_stream(&stream)
+            .await?;
+    } else if uri.eq("/dashboard") && req.get_method().eq("GET") {
+        HttpResponse::new(200, "OK", req.get_version())
+            .add_payload(include_bytes!("../../static/index.html"))
+            .add_header("Content-Type: text/html")
             .write_to_stream(&stream)
             .await?;
     } else {

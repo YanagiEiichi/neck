@@ -1,0 +1,10 @@
+<title>Neck Dashboard</title>
+<div>pool size: <strong id="vv"></strong></div>
+<script>
+const update = () => {
+  fetch('api/len').then(res => res.json()).then(r => vv.textContent = r);
+  setTimeout(update, 1000);
+};
+
+update();
+</script>

@@ -13,7 +13,7 @@ use crate::{
     utils::{NeckError, NeckResult},
 };
 
-use super::{ConnectingResult, ConnectionManager, PBFuture};
+use super::{ConnectingResult, ConnectionManager, PBF};
 
 pub struct PoolModeManager {
     size: usize,
@@ -140,12 +140,12 @@ impl PoolModeManager {
 
 impl ConnectionManager for PoolModeManager {
     /// Get the current size of the pool.
-    fn len(&self) -> PBFuture<usize> {
+    fn len(&self) -> PBF<usize> {
         Box::pin(async { self.storage.lock().await.len() })
     }
 
     /// Join the pool.
-    fn join(&self, stream: NeckStream) -> PBFuture<()> {
+    fn join(&self, stream: NeckStream) -> PBF<()> {
         Box::pin(async {
             // The NeckStream will be moved later, so we need to clone necessary properties before moving.
             let addr = stream.peer_addr.clone();
@@ -161,7 +161,7 @@ impl ConnectionManager for PoolModeManager {
     }
 
     /// Attempt to acquire a NeckStream from the pool and establish the HTTP proxy connection.
-    fn connect(&self, uri: String) -> PBFuture<ConnectingResult> {
+    fn connect(&self, uri: String) -> PBF<ConnectingResult> {
         Box::pin(async move {
             // This is a retry loop, where certain operations can be retried, with a maximum of 5 retry attempts.
             for _ in 1..=5 {

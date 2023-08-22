@@ -1,9 +1,7 @@
 mod direct;
 mod pool;
 
-use std::{future::Future, pin::Pin};
-
-use crate::neck::NeckStream;
+use crate::{neck::NeckStream, utils::PBF};
 
 pub use pool::*;
 pub use direct::*;
@@ -14,15 +12,14 @@ pub enum ConnectingResult {
     ServiceUnavailable(String),
 }
 
-pub type PBFuture<'a, O> = Pin<Box<dyn Future<Output = O> + Send + 'a>>;
 
 pub trait ConnectionManager: Send + Sync {
     /// Get the number of current avaliable connections.
-    fn len(&self) -> PBFuture<usize>;
+    fn len(&self) -> PBF<usize>;
 
     /// Join the manager.
-    fn join(&self, stream: NeckStream) -> PBFuture<()>;
+    fn join(&self, stream: NeckStream) -> PBF<()>;
 
     /// Attempt to acquire a NeckStream from the manager.
-    fn connect(&self, uri: String) -> PBFuture<ConnectingResult>;
+    fn connect(&self, uri: String) -> PBF<ConnectingResult>;
 }

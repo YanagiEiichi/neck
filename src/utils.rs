@@ -1,11 +1,7 @@
-use std::{error::Error, fmt::Display};
+use std::{error::Error, fmt::Display, pin::Pin, future::Future};
 
 #[derive(Debug)]
 pub struct NeckError(String);
-
-type BoxedError = Box<dyn Error + Send + Sync>;
-
-pub type NeckResult<T> = Result<T, BoxedError>;
 
 impl NeckError {
     pub fn wrap<T>(message: impl ToString) -> NeckResult<T> {
@@ -20,3 +16,10 @@ impl Display for NeckError {
 }
 
 impl Error for NeckError {}
+
+/// PBF = Pin Box Future
+pub type PBF<'a, O> = Pin<Box<dyn Future<Output = O> + Send + 'a>>;
+
+type BoxedError = Box<dyn Error + Send + Sync>;
+
+pub type NeckResult<T> = Result<T, BoxedError>;

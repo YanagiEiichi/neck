@@ -1,18 +1,14 @@
+use crate::{neck::NeckStream, utils::NeckResult, utils::PBF};
+
 mod connector_tcp;
-
-#[cfg(feature = "tls")]
-mod connector_tls;
-
-use std::{future::Future, pin::Pin};
-
-use crate::{neck::NeckStream, utils::NeckResult};
-
 pub use connector_tcp::*;
 
 #[cfg(feature = "tls")]
+mod connector_tls;
+#[cfg(feature = "tls")]
 pub use connector_tls::*;
 
-pub type ConnResult<'a> = Pin<Box<dyn Future<Output = NeckResult<NeckStream>> + Send + 'a>>;
+pub type ConnResult<'a> = PBF<'a, NeckResult<NeckStream>>;
 
 pub trait Connector: Send + Sync {
     fn connect(&self) -> ConnResult<'_>;

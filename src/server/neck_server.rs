@@ -2,7 +2,7 @@ use std::{process::exit, sync::Arc};
 
 use tokio::net::TcpListener;
 
-use crate::utils::BoxedError;
+use crate::utils::{BoxedError, PBF};
 
 use super::{
     handlers::request_handler,
@@ -18,6 +18,15 @@ fn fix_addr(addr: Option<String>) -> String {
     )
 }
 
+fn create_connection_manager(direct: bool, max_workers: Option<u32>) -> Box<dyn ConnectionManager> {
+    if direct {
+        Box::new(DirectModeManager {})
+    } else {
+        // The maximum allowed number of workers defaults 200.
+        Box::new(PoolModeManager::new(max_workers.unwrap_or(200) as usize))
+    }
+}
+
 fn error_handler(e: BoxedError) {
     #[cfg(debug_assertions)]
     println!("{:#?}", e);
@@ -30,24 +39,16 @@ pub struct NeckServer {
 
 impl NeckServer {
     /// Creates a new [`ServerContext`].
-    pub fn new(addr: Option<String>, direct: bool, max_workers: Option<u32>) -> Self {
-        Self {
+    pub fn new(addr: Option<String>, direct: bool, max_workers: Option<u32>) -> Arc<Self> {
+        Arc::new(Self {
             addr: fix_addr(addr),
-            manager: if direct {
-                Box::new(DirectModeManager {})
-            } else {
-                // The maximum allowed number of workers defaults 200.
-                Box::new(PoolModeManager::new(max_workers.unwrap_or(200) as usize))
-            },
-        }
+            manager: create_connection_manager(direct, max_workers),
+        })
     }
 
-    /// Start a neck server.
-    pub async fn start(self) -> ! {
-        let shared_ctx = Arc::new(self);
-
+    pub async fn start(ns: Arc<NeckServer>) {
         // Begin TCP listening on specified address.
-        let listener = match TcpListener::bind(&shared_ctx.addr).await {
+        let listener = match TcpListener::bind(&ns.addr).await {
             Ok(v) => v,
             Err(e) => {
                 eprint!("{}", e);
@@ -59,7 +60,7 @@ impl NeckServer {
             // Accept all requests and dispatch each of them using a new thread.
             match listener.accept().await {
                 Ok((stream, _)) => {
-                    let ctx = shared_ctx.clone();
+                    let ctx = ns.clone();
                     tokio::spawn(async move {
                         // Wrap the raw TcpStream with a NeckStream.
                         request_handler(stream.into(), ctx)
@@ -72,5 +73,16 @@ impl NeckServer {
                 }
             };
         }
+    }
+}
+
+pub trait Starter {
+    /// Start a neck server.
+    fn start<'a>(self) -> PBF<'a, ()>;
+}
+
+impl Starter for Arc<NeckServer> {
+    fn start<'a>(self) -> PBF<'a, ()> {
+        Box::pin(NeckServer::start(self))
     }
 }

@@ -1,6 +1,12 @@
+mod direct;
+mod pool;
+
 use std::{future::Future, pin::Pin};
 
 use crate::neck::NeckStream;
+
+pub use pool::*;
+pub use direct::*;
 
 pub enum ConnectingResult {
     Ok(NeckStream),

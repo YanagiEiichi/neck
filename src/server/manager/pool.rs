@@ -13,7 +13,7 @@ use crate::{
     utils::{NeckError, NeckResult},
 };
 
-use super::connection_manager::{ConnectingResult, ConnectionManager, PBFuture};
+use super::{ConnectingResult, ConnectionManager, PBFuture};
 
 pub struct PoolModeManager {
     size: usize,

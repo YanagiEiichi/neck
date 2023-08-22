@@ -1,9 +1,7 @@
-mod connection_manager;
-mod direct_mode_manager;
-mod http_adapter;
+mod adapter_http;
 mod neck_server;
-mod pool_mode_manager;
 mod request_handler;
-mod sock5_adapter;
+mod adapter_socks5;
+mod manager;
 
 pub use neck_server::*;

@@ -4,7 +4,7 @@ use tokio::{io::AsyncBufReadExt, net::TcpStream};
 
 use crate::neck::NeckStream;
 
-use super::{http_adapter::http_handler, sock5_adapter::sock5_handler, NeckServer};
+use super::{adapter_http::http_handler, adapter_socks5::sock5_handler, NeckServer};
 
 pub async fn is_socks5(stream: &NeckStream) -> bool {
     // Wait and peek the first buffer to check if the first byte is 5u8.

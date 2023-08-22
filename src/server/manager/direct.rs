@@ -1,6 +1,6 @@
 use tokio::net::TcpStream;
 
-use super::connection_manager::{ConnectingResult, ConnectionManager, PBFuture};
+use super::{ConnectingResult, ConnectionManager, PBFuture};
 
 pub struct DirectModeManager {}
 

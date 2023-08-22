@@ -9,11 +9,13 @@ use crate::{neck::NeckStream, utils::NeckResult};
 
 use super::{
     connector::Connector, neck_url::NeckUrl, start_worker::start_worker,
-    tcp_connector::TcpConnector, token_bucket::TokenBucket,
+    token_bucket::TokenBucket,
 };
 
+use super::connector::TcpConnector;
+
 #[cfg(feature = "tls")]
-use super::tls_connector::TlsConnector;
+use super::connector::TlsConnector;
 
 fn create_connector(
     url: &NeckUrl,

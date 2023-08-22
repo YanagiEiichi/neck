@@ -3,8 +3,7 @@ use std::{process::exit, sync::Arc};
 use tokio::net::TcpListener;
 
 use super::{
-    connection_manager::ConnectionManager, direct_mode_manager::DirectModeManager,
-    pool_mode_manager::PoolModeManager, request_handler::request_handler,
+    manager::{ConnectionManager, DirectModeManager, PoolModeManager}, request_handler::request_handler,
 };
 
 pub struct NeckServer {

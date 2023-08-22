@@ -6,7 +6,7 @@ use crate::{
     utils::{NeckError, NeckResult},
 };
 
-use super::{connection_manager::ConnectingResult, NeckServer};
+use super::{manager::ConnectingResult, NeckServer};
 
 async fn connect_upstream(
     stream: &NeckStream,

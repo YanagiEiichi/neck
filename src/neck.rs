@@ -9,7 +9,7 @@ use tokio::{
 
 use crate::{
     http::{HttpProtocol, HttpRequest, HttpResponse},
-    socks5::Sock5Connection,
+    socks5::Socks5Message,
 };
 
 pub struct NeckStream {
@@ -103,7 +103,7 @@ impl HttpResponse {
     }
 }
 
-impl Sock5Connection {
+impl Socks5Message {
     pub async fn write_to_stream(&self, stream: &NeckStream) -> io::Result<()> {
         let mut writer = stream.writer.lock().await;
         self.write_to(&mut *writer).await.map_err(|e| e.into())

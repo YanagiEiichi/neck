@@ -2,24 +2,24 @@ use std::sync::Arc;
 
 use crate::{
     neck::NeckStream,
-    socks5::{ClientGreeting, ServerChoice, Sock5Connection},
+    socks5::{ClientGreeting, ServerChoice, Socks5Message},
     utils::{NeckError, NeckResult},
 };
 
 use super::{manager::ConnectingResult, NeckServer};
 
 pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResult<()> {
-    let addr = read_sock5_request(&stream).await?;
+    let req = read_sock5_request(&stream).await?;
 
-    match ctx.manager.connect(addr.clone()).await {
+    match ctx.manager.connect(req.host.to_string()).await {
         ConnectingResult::Ok(upstream) => {
             println!(
                 "[{}] Connect to {} for {} [socks5]",
                 stream.peer_addr.to_string(),
                 upstream.peer_addr.to_string(),
-                addr
+                req.host.to_string()
             );
-            Sock5Connection::new(0).write_to_stream(&stream).await?;
+            req.clone().set_action(0).write_to_stream(&stream).await?;
 
             // Weld the client connection with upstream.
             stream.weld(&upstream).await;
@@ -28,24 +28,24 @@ pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResu
             println!(
                 "[{}] No available connections for {}",
                 stream.peer_addr.to_string(),
-                addr
+                req.host.to_string()
             );
-            Sock5Connection::new(1).write_to_stream(&stream).await?;
+            req.clone().set_action(1).write_to_stream(&stream).await?;
         }
         ConnectingResult::ServiceUnavailable(_) => {
             println!(
                 "[{}] Failed to connect {}",
                 stream.peer_addr.to_string(),
-                addr
+                req.host.to_string()
             );
-            Sock5Connection::new(1).write_to_stream(&stream).await?;
+            req.clone().set_action(1).write_to_stream(&stream).await?;
         }
     };
 
     Ok(())
 }
 
-async fn read_sock5_request(stream: &NeckStream) -> NeckResult<String> {
+async fn read_sock5_request(stream: &NeckStream) -> NeckResult<Socks5Message> {
     let mut reader = stream.reader.lock().await;
     let mut writer = stream.writer.lock().await;
 
@@ -57,13 +57,13 @@ async fn read_sock5_request(stream: &NeckStream) -> NeckResult<String> {
         .write_to(&mut *writer)
         .await?;
 
-    let req = Sock5Connection::read_from(&mut reader).await?;
+    let req = Socks5Message::read_from(&mut reader).await?;
     // println!("{:#?}", req);
 
     if req.action != 1 {
-        Sock5Connection::new(7).write_to(&mut *writer).await?;
+        req.clone().set_action(7).write_to(&mut *writer).await?;
         NeckError::wrap("Unsupported socks5 cmd")?
     }
 
-    Ok(req.to_addr())
+    Ok(req)
 }

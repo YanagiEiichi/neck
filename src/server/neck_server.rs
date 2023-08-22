@@ -2,14 +2,12 @@ use std::{process::exit, sync::Arc};
 
 use tokio::net::TcpListener;
 
-use super::{
-    manager::{ConnectionManager, DirectModeManager, PoolModeManager}, request_handler::request_handler,
-};
+use crate::utils::BoxedError;
 
-pub struct NeckServer {
-    pub addr: String,
-    pub manager: Box<dyn ConnectionManager>,
-}
+use super::{
+    handlers::request_handler,
+    manager::{ConnectionManager, DirectModeManager, PoolModeManager},
+};
 
 fn fix_addr(addr: Option<String>) -> String {
     addr.map_or_else(
@@ -18,6 +16,16 @@ fn fix_addr(addr: Option<String>) -> String {
         // Convert pure number {port} to "0.0.0.0:{port}"
         |v| v.parse::<u16>().map_or(v, |i| format!("0.0.0.0:{}", i)),
     )
+}
+
+fn error_handler(e: BoxedError) {
+    #[cfg(debug_assertions)]
+    println!("{:#?}", e);
+}
+
+pub struct NeckServer {
+    pub addr: String,
+    pub manager: Box<dyn ConnectionManager>,
 }
 
 impl NeckServer {
@@ -35,7 +43,7 @@ impl NeckServer {
     }
 
     /// Start a neck server.
-    pub async fn start(self) {
+    pub async fn start(self) -> ! {
         let shared_ctx = Arc::new(self);
 
         // Begin TCP listening on specified address.
@@ -51,7 +59,13 @@ impl NeckServer {
             // Accept all requests and dispatch each of them using a new thread.
             match listener.accept().await {
                 Ok((stream, _)) => {
-                    tokio::spawn(request_handler(stream, shared_ctx.clone()));
+                    let ctx = shared_ctx.clone();
+                    tokio::spawn(async move {
+                        // Wrap the raw TcpStream with a NeckStream.
+                        request_handler(stream.into(), ctx)
+                            .await
+                            .unwrap_or_else(error_handler);
+                    });
                 }
                 Err(e) => {
                     eprint!("{}", e);

@@ -20,6 +20,6 @@ impl Error for NeckError {}
 /// PBF = Pin Box Future
 pub type PBF<'a, O> = Pin<Box<dyn Future<Output = O> + Send + 'a>>;
 
-type BoxedError = Box<dyn Error + Send + Sync>;
+pub type BoxedError = Box<dyn Error + Send + Sync>;
 
 pub type NeckResult<T> = Result<T, BoxedError>;

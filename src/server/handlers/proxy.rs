@@ -6,7 +6,7 @@ use crate::{
     utils::{NeckError, NeckResult},
 };
 
-use super::{manager::ConnectingResult, NeckServer};
+use super::super::{manager::ConnectingResult, NeckServer};
 
 async fn connect_upstream(
     stream: &NeckStream,
@@ -54,7 +54,7 @@ async fn connect_upstream(
 }
 
 /// Process an HTTPS proxy request.
-async fn connect_handler(
+pub async fn https_proxy_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
@@ -82,7 +82,7 @@ async fn connect_handler(
     Ok(())
 }
 
-async fn simple_http_proxy_handler(
+pub async fn http_proxy_handler(
     stream: NeckStream,
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
@@ -132,74 +132,4 @@ async fn simple_http_proxy_handler(
     stream.weld(&upstream).await;
 
     Ok(())
-}
-
-async fn join_handler(
-    stream: NeckStream,
-    req: &HttpRequest,
-    ctx: &Arc<NeckServer>,
-) -> NeckResult<()> {
-    // Respond a status with 101 Switching Protocols.
-    HttpResponse::new(101, "Switching Protocols", req.get_version())
-        .add_header("Connection: Upgrade")
-        .add_header("Upgrade: neck")
-        .write_to_stream(&stream)
-        .await?;
-
-    // Join the manager (ownership for the stream is moved to the manager)
-    ctx.manager.join(stream).await;
-
-    Ok(())
-}
-
-async fn api_handler(
-    stream: NeckStream,
-    req: &HttpRequest,
-    ctx: &Arc<NeckServer>,
-) -> NeckResult<()> {
-    let uri = req.get_uri();
-    if uri.eq("/manager/len") && req.get_method().eq("GET") {
-        HttpResponse::new(200, "OK", req.get_version())
-            .add_payload(ctx.manager.len().await.to_string().as_bytes())
-            .add_payload(b"\n")
-            .write_to_stream(&stream)
-            .await?;
-    } else {
-        HttpResponse::new(404, "Not Found", req.get_version())
-            .add_payload(b"Not Found\n")
-            .write_to_stream(&stream)
-            .await?;
-    }
-    Ok(())
-}
-
-pub async fn http_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResult<()> {
-    // Read the first request.
-    // NOTE: Do not read payload here, because payload may be a huge stream.
-    let req = HttpRequest::read_header_from(&stream).await?;
-
-    // Dispatch to different handlers.
-    if let "CONNECT" = req.get_method() {
-        connect_handler(stream, &req, &ctx).await
-    } else
-    // For HTTP Upgrade.
-    if let Some(upgrade) = req.headers.get_header_value("Upgrade") {
-        if upgrade.eq("neck") {
-            join_handler(stream, &req, &ctx).await
-        } else {
-            HttpResponse::new(400, "Bad Request", req.get_version())
-                .add_payload(format!("The protocol '{}' is not supported.", upgrade).as_bytes())
-                .write_to_stream(&stream)
-                .await
-                .map_err(|e| e.into())
-        }
-    } else
-    // It is a simple HTTP proxy request.
-    if req.get_uri().starts_with("http://") {
-        simple_http_proxy_handler(stream, &req, &ctx).await
-    }
-    // Others.
-    else {
-        api_handler(stream, &req, &ctx).await
-    }
 }

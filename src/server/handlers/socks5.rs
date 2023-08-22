@@ -6,7 +6,7 @@ use crate::{
     utils::{NeckError, NeckResult},
 };
 
-use super::{manager::ConnectingResult, NeckServer};
+use super::super::{manager::ConnectingResult, NeckServer};
 
 pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResult<()> {
     let req = read_sock5_request(&stream).await?;

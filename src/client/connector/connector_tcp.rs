@@ -1,7 +1,7 @@
 use tokio::net::TcpStream;
 
-use super::{ConnResult, Connector};
 use super::super::neck_url::NeckUrl;
+use super::{ConnResult, Connector};
 
 pub struct TcpConnector {
     addr: String,

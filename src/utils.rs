@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display, pin::Pin, future::Future};
+use std::{error::Error, fmt::Display, future::Future, pin::Pin};
 
 #[derive(Debug)]
 pub struct NeckError(String);

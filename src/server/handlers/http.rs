@@ -10,7 +10,7 @@ use super::{
     super::NeckServer,
     api::api_handler,
     join::join_handler,
-    proxy::{https_proxy_handler, http_proxy_handler},
+    proxy::{http_proxy_handler, https_proxy_handler},
 };
 
 pub async fn http_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResult<()> {

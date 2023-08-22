@@ -3,8 +3,8 @@ use tokio::net::TcpStream;
 use crate::neck::NeckStream;
 
 use super::{
-    {ConnResult, Connector},
     super::neck_url::NeckUrl,
+    {ConnResult, Connector},
 };
 
 pub struct TlsConnector {

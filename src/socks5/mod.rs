@@ -32,7 +32,7 @@ impl Socks5Message {
     }
 
     pub fn set_action(&mut self, action: u8) -> &mut Self {
-      self.action = action;
-      self
+        self.action = action;
+        self
     }
 }

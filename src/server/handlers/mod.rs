@@ -1,8 +1,8 @@
-mod socks5;
-mod http;
 mod api;
+mod http;
 mod join;
 mod proxy;
-mod request; 
+mod request;
+mod socks5;
 
 pub use request::*;

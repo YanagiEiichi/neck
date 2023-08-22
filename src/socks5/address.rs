@@ -1,6 +1,9 @@
-use std::{io::ErrorKind, net::{Ipv4Addr, Ipv6Addr}};
+use std::{
+    io::ErrorKind,
+    net::{Ipv4Addr, Ipv6Addr},
+};
 
-use tokio::io::{AsyncRead, BufReader, self, AsyncWrite, AsyncWriteExt, AsyncReadExt};
+use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 
 /// https://datatracker.ietf.org/doc/html/rfc1928#section-5
 #[derive(Debug, Clone)]
@@ -57,7 +60,7 @@ impl ToString for Address {
 }
 
 impl Default for Address {
-  fn default() -> Self {
-      Address::IPv4(0)
-  }
+    fn default() -> Self {
+        Address::IPv4(0)
+    }
 }

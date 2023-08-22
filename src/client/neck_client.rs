@@ -8,8 +8,7 @@ use tokio::sync::{
 use crate::{neck::NeckStream, utils::NeckResult};
 
 use super::{
-    connector::Connector, neck_url::NeckUrl, start_worker::start_worker,
-    token_bucket::TokenBucket,
+    connector::Connector, neck_url::NeckUrl, start_worker::start_worker, token_bucket::TokenBucket,
 };
 
 use super::connector::TcpConnector;

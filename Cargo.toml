@@ -15,6 +15,8 @@ base64 = "0.21.2"
 clap = { version = "4.3.19", features = ["derive"] }
 native-tls = { version = "0.2.11", optional = true, features = ["vendored"] }
 rand = "0.8.5"
+serde = { version = "1.0.186", features = ["derive"] }
+serde_json = "1.0.105"
 tokio = { version = "1.29.1", features = ["full"] }
 tokio-native-tls = { version = "0.3.1", optional = true }
 

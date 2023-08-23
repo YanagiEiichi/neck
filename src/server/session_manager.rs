@@ -115,4 +115,10 @@ impl SessionManager {
         // Create the session.
         Session { sender: self.sender.clone(), id }
     }
+
+    pub async fn list(&self) -> Result<String, serde_json::Error> {
+        let storage = self.storage.lock().await;
+        let list = storage.values().collect::<Vec<&ConnnectionInfo>>(); //.collect::<Vec<ConnnectionInfo>>();
+        serde_json::to_string(&list)
+    }
 }

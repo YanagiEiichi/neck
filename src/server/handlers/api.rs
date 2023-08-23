@@ -20,6 +20,12 @@ pub async fn api_handler(
             .add_payload(b"\n")
             .write_to_stream(&stream)
             .await?;
+    } else if uri.eq("/api/mc") && req.get_method().eq("GET") {
+        HttpResponse::new(200, "OK", req.get_version())
+            .add_payload(ctx.session_manager.list().await.unwrap().as_bytes())
+            .add_header("Content-Type: application/json")
+            .write_to_stream(&stream)
+            .await?;
     } else if uri.eq("/dashboard") && req.get_method().eq("GET") {
         HttpResponse::new(200, "OK", req.get_version())
             .add_payload(include_bytes!("../../static/index.html"))

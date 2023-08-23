@@ -1,10 +1,69 @@
 <title>Neck Dashboard</title>
-<div>pool size: <strong id="vv"></strong></div>
-<script>
-const update = () => {
-  fetch('api/len').then(res => res.json()).then(r => vv.textContent = r);
-  setTimeout(update, 1000);
-};
+<style>
+  body {
+    font-family: "Helvetica Neue", Arial;
+    color: #333;
+  }
+  table {
+    box-sizing: border-box;
+    border-collapse: collapse;
+    width: 100%;
+  }
+  td {
+    padding: 0.5em 1em;
+    border: 1px solid #eee;
+  }
 
-update();
+  tr:first-child {
+    background: #fafafa;
+    font-weight: bold;
+  }
+</style>
+<script>
+  const table = document.createElement("table");
+
+  const renderState = (s) => {
+    switch (s) {
+      case 0:
+        return `<b style="color: gray;">Waiting</b>`;
+      case 1:
+        return `<b style="color: gray;">Connecting</b>`;
+      case 2:
+        return `<b style="color: green;">Established</b>`;
+      default:
+        return `<b style="color: red;">Unknown</b>`;
+    }
+  };
+
+  const update = () => {
+    fetch("api/mc")
+      .then((res) => res.json())
+      .then((list) => {
+        while (table.rows.length > 1) table.deleteRow(1);
+        list.forEach((i) => {
+          let row = table.insertRow();
+          row.insertCell().textContent = i.id;
+          row.insertCell().textContent = i.proto;
+          row.insertCell().innerHTML = renderState(i.state);
+          row.insertCell().textContent = i.host;
+          row.insertCell().textContent = i.from;
+          row.insertCell().textContent = new Date(i.timestamp).toLocaleString();
+        });
+      });
+    setTimeout(update, 1000);
+  };
+
+  const main = () => {
+    let row = table.insertRow();
+    row.insertCell().textContent = 'ID';
+    row.insertCell().textContent = 'Type';
+    row.insertCell().textContent = 'State';
+    row.insertCell().textContent = 'Host';
+    row.insertCell().textContent = 'From';
+    row.insertCell().textContent = 'Time';
+    document.body.append(table);
+    update();
+  };
+
+  document.body ? main() : addEventListener("load", main);
 </script>

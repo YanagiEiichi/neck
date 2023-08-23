@@ -59,6 +59,10 @@ pub async fn https_proxy_handler(
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
 ) -> NeckResult<()> {
+    let session = ctx
+        .session_manager
+        .create_session("https", &stream, req.get_uri().to_string());
+
     // Attempt to connect upstream server via the proxy connection manager.
     let upstream = connect_upstream(&stream, req.get_uri(), req.get_version(), ctx).await?;
 
@@ -78,6 +82,8 @@ pub async fn https_proxy_handler(
 
     // Weld the client connection with upstream.
     stream.weld(&upstream).await;
+
+    drop(session);
 
     Ok(())
 }
@@ -103,6 +109,10 @@ pub async fn http_proxy_handler(
     if !host.contains(':') {
         host = Cow::Owned(format!("{}:80", host));
     }
+
+    let session = ctx
+        .session_manager
+        .create_session("http", &stream, host.to_string());
 
     // Attempt to connect upstream server via the proxy connection manager.
     let upstream = connect_upstream(&stream, &host, req.get_version(), ctx).await?;
@@ -130,6 +140,8 @@ pub async fn http_proxy_handler(
 
     // Weld the client connection with upstream.
     stream.weld(&upstream).await;
+
+    drop(session);
 
     Ok(())
 }

@@ -7,6 +7,7 @@ use crate::utils::{BoxedError, PBF};
 use super::{
     handlers::request_handler,
     manager::{ConnectionManager, DirectModeManager, PoolModeManager},
+    session_manager::SessionManager,
 };
 
 fn fix_addr(addr: Option<String>) -> String {
@@ -35,6 +36,7 @@ fn error_handler(e: BoxedError) {
 pub struct NeckServer {
     pub addr: String,
     pub manager: Box<dyn ConnectionManager>,
+    pub session_manager: SessionManager,
 }
 
 impl NeckServer {
@@ -43,6 +45,7 @@ impl NeckServer {
         Arc::new(Self {
             addr: fix_addr(addr),
             manager: create_connection_manager(direct, max_workers),
+            session_manager: SessionManager::new(),
         })
     }
 

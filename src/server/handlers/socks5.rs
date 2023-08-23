@@ -11,6 +11,8 @@ use super::super::{manager::ConnectingResult, NeckServer};
 pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResult<()> {
     let req = read_sock5_request(&stream).await?;
 
+    let session = ctx.session_manager.create_session("sock5", &stream, req.host.to_string());
+
     match ctx.manager.connect(req.host.to_string()).await {
         ConnectingResult::Ok(upstream) => {
             println!(
@@ -41,6 +43,8 @@ pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResu
             req.clone().set_action(1).write_to_stream(&stream).await?;
         }
     };
+
+    drop(session);
 
     Ok(())
 }

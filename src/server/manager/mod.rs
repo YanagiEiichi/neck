@@ -6,6 +6,8 @@ use crate::{neck::NeckStream, utils::PBF};
 pub use direct::*;
 pub use pool::*;
 
+use super::session_manager::Session;
+
 pub enum ConnectingResult {
     Ok(NeckStream),
     BadGateway(),
@@ -20,5 +22,5 @@ pub trait ConnectionManager: Send + Sync {
     fn join(&self, stream: NeckStream) -> PBF<()>;
 
     /// Attempt to acquire a NeckStream from the manager.
-    fn connect(&self, uri: String) -> PBF<ConnectingResult>;
+    fn connect<'a>(&'a self, session: &'a Session) -> PBF<'a, ConnectingResult>;
 }

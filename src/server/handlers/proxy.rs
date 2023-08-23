@@ -3,6 +3,7 @@ use std::{borrow::Cow, sync::Arc};
 use crate::{
     http::{HttpCommon, HttpRequest, HttpResponse},
     neck::NeckStream,
+    server::session_manager::Session,
     utils::{NeckError, NeckResult},
 };
 
@@ -10,11 +11,11 @@ use super::super::{manager::ConnectingResult, NeckServer};
 
 async fn connect_upstream(
     stream: &NeckStream,
-    host: &str,
+    session: &Session,
     version: &str,
     ctx: &Arc<NeckServer>,
 ) -> NeckResult<NeckStream> {
-    match ctx.manager.connect(host.to_string()).await {
+    match ctx.manager.connect(session).await {
         ConnectingResult::Ok(v) => Ok(v),
 
         // Not enough available worker connections in the manager.
@@ -22,7 +23,7 @@ async fn connect_upstream(
             println!(
                 "[{}] No available connections for {}",
                 stream.peer_addr.to_string(),
-                host
+                session.host
             );
 
             HttpResponse::new(502, "Bad Gateway", version)
@@ -39,7 +40,7 @@ async fn connect_upstream(
             println!(
                 "[{}] Failed to connect {}",
                 stream.peer_addr.to_string(),
-                host
+                session.host
             );
 
             HttpResponse::new(503, "Service Unavailable", version)
@@ -59,12 +60,12 @@ pub async fn https_proxy_handler(
     req: &HttpRequest,
     ctx: &Arc<NeckServer>,
 ) -> NeckResult<()> {
-    let session = ctx
-        .session_manager
-        .create_session("https", &stream, req.get_uri().to_string());
+    let session =
+        ctx.session_manager
+            .create_session("https", stream.peer_addr, req.get_uri().to_string());
 
     // Attempt to connect upstream server via the proxy connection manager.
-    let upstream = connect_upstream(&stream, req.get_uri(), req.get_version(), ctx).await?;
+    let upstream = connect_upstream(&stream, &session, req.get_version(), ctx).await?;
 
     // Now, a successful connection has been established with the upstream server.
 
@@ -112,10 +113,10 @@ pub async fn http_proxy_handler(
 
     let session = ctx
         .session_manager
-        .create_session("http", &stream, host.to_string());
+        .create_session("http", stream.peer_addr, host.to_string());
 
     // Attempt to connect upstream server via the proxy connection manager.
-    let upstream = connect_upstream(&stream, &host, req.get_version(), ctx).await?;
+    let upstream = connect_upstream(&stream, &session, req.get_version(), ctx).await?;
 
     // Now, a successful connection has been established with the upstream server.
 

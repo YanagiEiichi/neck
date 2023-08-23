@@ -2,7 +2,7 @@ use std::{collections::HashMap, net::SocketAddr, ops::Add, sync::Arc, time::Dura
 
 use rand::Rng;
 use tokio::{
-    io::{self, AsyncBufReadExt},
+    io::AsyncBufReadExt,
     sync::{Mutex, Notify},
     time::{timeout, timeout_at, Instant},
 };
@@ -10,6 +10,7 @@ use tokio::{
 use crate::{
     http::{HttpCommon, HttpRequest, HttpResponse},
     neck::NeckStream,
+    server::session_manager::Session,
     utils::{NeckError, NeckResult},
 };
 
@@ -52,6 +53,30 @@ impl PoolModeManager {
                 return None;
             }
         }
+    }
+
+    async fn take_and_send_connect(&self, uri: &str) -> Option<NeckStream> {
+        // This is a retry loop, where certain operations can be retried, with a maximum of 5 retry attempts.
+        for _ in 1..=5 {
+            // Take a item from pool without retry.
+            // If the pool is empty, retrying is pointless.
+            let stream = match self.take().await {
+                Some(k) => k,
+                None => break,
+            };
+
+            // Send CONNECT reqeust.
+            if let Err(_) = HttpRequest::new("CONNECT", &uri, "HTTP/1.1")
+                .add_header_kv("Host", &stream.peer_addr.to_string())
+                .write_to_stream(&stream)
+                .await
+            {
+                continue;
+            };
+
+            return Some(stream);
+        }
+        None
     }
 
     /// Try to insert a `stream` to the pool and send a notification if fuccessful.
@@ -161,57 +186,38 @@ impl ConnectionManager for PoolModeManager {
     }
 
     /// Attempt to acquire a NeckStream from the pool and establish the HTTP proxy connection.
-    fn connect(&self, uri: String) -> PBF<ConnectingResult> {
+    fn connect<'a>(&'a self, session: &'a Session) -> PBF<'a, ConnectingResult> {
+        let ss = Arc::new(session);
         Box::pin(async move {
-            // This is a retry loop, where certain operations can be retried, with a maximum of 5 retry attempts.
-            for _ in 1..=5 {
-                // Take a item from pool without retry.
-                // If the pool is empty, retrying is pointless.
-                let stream = match self.take().await {
-                    Some(k) => k,
-                    None => break,
-                };
+            let stream = match self.take_and_send_connect(&ss.host).await {
+                Some(it) => it,
+                None => return ConnectingResult::BadGateway(),
+            };
 
-                // Send a CONNECT request and receive an HTTP response.
-                let res = match send_connect_and_receive_response(&uri, &stream).await {
-                    Ok(r) => r,
-                    // This operation can be retried.
-                    Err(_) => continue,
-                };
+            session.set_it_connecting();
 
-                // Got a non-200 status, this means proxy server cannot process this request, retrying is pointless.
-                if res.get_status() != 200 {
-                    let payload = res
-                        .get_payload()
-                        .as_ref()
-                        .map_or_else(Vec::default, |v| v.to_vec());
-                    let text = String::from_utf8(payload).unwrap_or_else(|e| e.to_string());
-                    return ConnectingResult::ServiceUnavailable(text);
-                }
+            // Receive an HTTP response.
+            let res = match HttpResponse::read_from(&stream).await {
+                Ok(it) => it,
+                Err(e) => return ConnectingResult::ServiceUnavailable(e.to_string()),
+            };
 
-                // Success, return the NeckStream object (transfer ownership).
-                return ConnectingResult::Ok(stream);
+            // Got a non-200 status, this means proxy server cannot process this request, retrying is pointless.
+            if res.get_status() != 200 {
+                let payload = res
+                    .get_payload()
+                    .as_ref()
+                    .map_or_else(Vec::default, |v| v.to_vec());
+                let text = String::from_utf8(payload).unwrap_or_else(|e| e.to_string());
+                return ConnectingResult::ServiceUnavailable(text);
             }
 
-            // After too many retry attempts, a 502 status response is respond.
-            ConnectingResult::BadGateway()
+            session.set_it_established();
+
+            // Success, return the NeckStream object (transfer ownership).
+            return ConnectingResult::Ok(stream);
         })
     }
-}
-
-/// Send a CONNECT request and receive an HTTP response.
-async fn send_connect_and_receive_response(
-    uri: &String,
-    stream: &NeckStream,
-) -> io::Result<HttpResponse> {
-    // Send CONNECT reqeust.
-    HttpRequest::new("CONNECT", uri, "HTTP/1.1")
-        .add_header_kv("Host", &stream.peer_addr.to_string())
-        .write_to_stream(stream)
-        .await?;
-
-    // Receive an HTTP response.
-    Ok(HttpResponse::read_from(stream).await?)
 }
 
 /// Send a PING request and assert a PONG response.

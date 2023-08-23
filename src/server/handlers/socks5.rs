@@ -11,9 +11,11 @@ use super::super::{manager::ConnectingResult, NeckServer};
 pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResult<()> {
     let req = read_sock5_request(&stream).await?;
 
-    let session = ctx.session_manager.create_session("sock5", &stream, req.host.to_string());
+    let session =
+        ctx.session_manager
+            .create_session("sock5", stream.peer_addr, req.host.to_string());
 
-    match ctx.manager.connect(req.host.to_string()).await {
+    match ctx.manager.connect(&session).await {
         ConnectingResult::Ok(upstream) => {
             println!(
                 "[{}] Connect to {} for {} [socks5]",

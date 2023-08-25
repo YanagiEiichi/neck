@@ -29,7 +29,7 @@ impl NeckStream {
             peer_addr,
             local_addr,
             writer: Mutex::new(Box::new(w)),
-            reader: Arc::new(Mutex::new(BufReader::new(Box::new(r)))),
+            reader: Arc::new(Mutex::new(BufReader::with_capacity(10240, Box::new(r)))),
         }
     }
 

@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{
-    io::{self, split, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader},
+    io::{self, split, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter},
     net::TcpStream,
     select,
     sync::Mutex,
@@ -74,7 +74,10 @@ impl From<TcpStream> for NeckStream {
 impl HttpProtocol {
     pub async fn write_to_stream(&self, stream: &NeckStream) -> io::Result<()> {
         let mut writer = stream.writer.lock().await;
-        self.write_to(&mut *writer).await.map_err(|e| e.into())
+        let mut w = BufWriter::with_capacity(1480, &mut *writer);
+        self.write_to(&mut w).await?;
+        w.flush().await?;
+        Ok(())
     }
 }
 
@@ -106,6 +109,9 @@ impl HttpResponse {
 impl Socks5Message {
     pub async fn write_to_stream(&self, stream: &NeckStream) -> io::Result<()> {
         let mut writer = stream.writer.lock().await;
-        self.write_to(&mut *writer).await.map_err(|e| e.into())
+        let mut w = BufWriter::with_capacity(1480, &mut *writer);
+        self.write_to(&mut w).await?;
+        w.flush().await?;
+        Ok(())
     }
 }

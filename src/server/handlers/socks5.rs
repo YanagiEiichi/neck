@@ -14,7 +14,7 @@ pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResu
         ctx.session_manager
             .create_session("sock5", stream.peer_addr, req.host.to_string());
 
-    match ctx.manager.connect(&session).await {
+    match stream.wait_toggle(ctx.manager.connect(&session)).await? {
         ConnectingResult::Ok(upstream) => {
             println!(
                 "[{}] Connect to {} for {} [socks5]",

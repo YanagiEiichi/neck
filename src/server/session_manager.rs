@@ -13,7 +13,7 @@ use tokio::{
     spawn,
     sync::{
         mpsc::{channel, Receiver, Sender},
-        Mutex,
+        Mutex, Notify,
     },
 };
 
@@ -28,17 +28,19 @@ pub struct SessionManager {
     inc: AtomicUsize,
     storage: Storage,
     sender: Sender<Action>,
+    notify: Arc<Notify>,
 }
 
-async fn consumer_deamon(storage: Storage, mut receiver: Receiver<Action>) {
+async fn consumer_deamon(storage: Storage, mut receiver: Receiver<Action>, notify: Arc<Notify>) {
     while let Some(action) = receiver.recv().await {
         match action {
             Action::Insert(key, value) => {
                 storage.lock().await.insert(key, value);
+                notify.notify_waiters();
             }
             Action::Remove(key) => {
                 if let Some(_value) = storage.lock().await.remove(&key) {
-                    // println!("remove {}", value.host);
+                    notify.notify_waiters();
                 };
             }
         }
@@ -60,30 +62,27 @@ pub struct RawSession {
 
     #[serde(skip_serializing)]
     sender: Sender<Action>,
+
+    #[serde(skip_serializing)]
+    notify: Arc<Notify>,
 }
 
 impl RawSession {
     pub fn set_it_connecting(&self) {
-        self.state.store(1, SeqCst)
+        self.state.store(1, SeqCst);
+        self.notify.notify_waiters();
     }
 
     pub fn set_it_established(&self) {
-        self.state.store(2, SeqCst)
+        self.state.store(2, SeqCst);
+        self.notify.notify_waiters();
     }
 }
 
 impl Drop for RawSession {
     fn drop(&mut self) {
         // Try to send a remove message synchronously.
-        if let Ok(_) = self.sender.try_send(Action::Remove(self.id)) {
-            return;
-        }
-        // Otherwise, spawn a new routine to execute this action.
-        let sender = self.sender.clone();
-        let action = Action::Remove(self.id);
-        spawn(async move {
-            let _ = sender.send(action).await;
-        });
+        let _ = self.sender.try_send(Action::Remove(self.id));
     }
 }
 
@@ -92,12 +91,14 @@ impl SessionManager {
         let storage = Arc::new(Mutex::new(BTreeMap::<usize, Weak<RawSession>>::new()));
         let (sender, receiver) = channel(128);
         let inc = AtomicUsize::new(1);
+        let notify = Arc::new(Notify::new());
         let mc = Self {
             inc,
             storage,
             sender,
+            notify: notify.clone(),
         };
-        spawn(consumer_deamon(mc.storage.clone(), receiver));
+        spawn(consumer_deamon(mc.storage.clone(), receiver, notify));
         mc
     }
 
@@ -124,6 +125,7 @@ impl SessionManager {
             host,
             from,
             sender: self.sender.clone(),
+            notify: self.notify.clone(),
         });
 
         // Try to send the info.
@@ -145,5 +147,9 @@ impl SessionManager {
             .map(|v| v.as_ref())
             .collect::<Vec<&RawSession>>();
         serde_json::to_string(&ptr_list)
+    }
+
+    pub fn watch(&self) -> tokio::sync::futures::Notified<'_> {
+        self.notify.notified()
     }
 }

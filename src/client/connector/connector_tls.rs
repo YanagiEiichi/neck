@@ -1,6 +1,6 @@
 use tokio::net::TcpStream;
 
-use crate::utils::NeckStream;
+use crate::utils::{enable_keepalive, NeckStream};
 
 use super::{
     super::neck_url::NeckUrl,
@@ -29,7 +29,7 @@ impl Connector for TlsConnector {
     fn connect(&self) -> ConnResult<'_> {
         Box::pin(async {
             // Attempt to connect Neck Server.
-            let tcp_stream = TcpStream::connect(&self.addr).await?;
+            let tcp_stream = enable_keepalive(TcpStream::connect(&self.addr).await?);
 
             // Get addresses pairs.
             let peer_addr = tcp_stream.peer_addr().unwrap();

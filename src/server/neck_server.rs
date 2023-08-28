@@ -2,7 +2,7 @@ use std::{process::exit, sync::Arc};
 
 use tokio::net::TcpListener;
 
-use crate::utils::{BoxedError, PBF};
+use crate::utils::{enable_keepalive, BoxedError, PBF};
 
 use super::{
     handlers::request_handler,
@@ -66,7 +66,7 @@ impl NeckServer {
                     let ctx = ns.clone();
                     tokio::spawn(async move {
                         // Wrap the raw TcpStream with a NeckStream.
-                        request_handler(stream.into(), ctx)
+                        request_handler(enable_keepalive(stream).into(), ctx)
                             .await
                             .unwrap_or_else(error_handler);
                     });

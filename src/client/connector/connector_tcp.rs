@@ -1,6 +1,4 @@
-use tokio::net::TcpStream;
-
-use crate::utils::enable_keepalive;
+use crate::utils::connect;
 
 use super::super::neck_url::NeckUrl;
 use super::{ConnResult, Connector};
@@ -19,6 +17,6 @@ impl TcpConnector {
 
 impl Connector for TcpConnector {
     fn connect(&self) -> ConnResult<'_> {
-        Box::pin(async { Ok(enable_keepalive(TcpStream::connect(&self.addr).await?).into()) })
+        Box::pin(async { Ok(connect(&self.addr).await?.into()) })
     }
 }

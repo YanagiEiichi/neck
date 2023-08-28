@@ -1,6 +1,7 @@
-use tokio::net::TcpStream;
-
-use crate::{server::session_manager::Session, utils::NeckStream};
+use crate::{
+    server::session_manager::Session,
+    utils::{connect, NeckStream},
+};
 
 use super::{ConnectingResult, ConnectionManager, PBF};
 
@@ -21,7 +22,7 @@ impl ConnectionManager for DirectModeManager {
     fn connect<'a>(&'a self, session: &'a Session) -> PBF<'a, ConnectingResult> {
         Box::pin(async move {
             // Pass through the tokio TcpStream::connect.
-            match TcpStream::connect(&session.host).await {
+            match connect(&session.host).await {
                 Ok(stream) => ConnectingResult::Ok(stream.into()),
                 Err(e) => ConnectingResult::ServiceUnavailable(e.to_string()),
             }

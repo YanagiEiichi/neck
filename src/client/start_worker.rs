@@ -2,13 +2,12 @@ use std::{ops::Add, sync::Arc, time::Duration};
 
 use tokio::{
     io,
-    net::TcpStream,
     time::{self, timeout},
 };
 
 use crate::{
     http::{HttpRequest, HttpResponse},
-    utils::{NeckError, NeckResult, NeckStream},
+    utils::{connect, NeckError, NeckResult, NeckStream},
 };
 
 use super::{Event::*, NeckClient};
@@ -74,7 +73,7 @@ async fn connect_and_join(ctx: &NeckClient) -> NeckResult<NeckStream> {
 
 async fn connect_upstream_and_weld(stream: &NeckStream, req: &HttpRequest) -> io::Result<()> {
     // Attempt to connect the upstream server.
-    match TcpStream::connect(req.get_uri()).await {
+    match connect(req.get_uri()).await {
         // If the connection is established successfully.
         Ok(upstream) => {
             println!("[{}] Connect to {}", stream.local_addr, req.get_uri());

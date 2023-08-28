@@ -5,7 +5,7 @@ use tokio::sync::{
     Mutex,
 };
 
-use crate::{neck::NeckStream, utils::NeckResult};
+use crate::utils::{NeckResult, NeckStream};
 
 use super::{
     connector::Connector, neck_url::NeckUrl, start_worker::start_worker, token_bucket::TokenBucket,

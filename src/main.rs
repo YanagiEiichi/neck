@@ -4,7 +4,6 @@ use server::{NeckServer, Starter};
 
 mod client;
 mod http;
-mod neck;
 mod server;
 mod socks5;
 mod utils;

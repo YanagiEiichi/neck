@@ -9,9 +9,8 @@ use tokio::{
 
 use crate::{
     http::{HttpCommon, HttpRequest, HttpResponse},
-    neck::NeckStream,
     server::session_manager::Session,
-    utils::{NeckError, NeckResult},
+    utils::{NeckError, NeckResult, NeckStream},
 };
 
 use super::{ConnectingResult, ConnectionManager, PBF};

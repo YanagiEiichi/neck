@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    neck::NeckStream,
     socks5::{ClientGreeting, ServerChoice, Socks5Message},
-    utils::{NeckError, NeckResult},
+    utils::{NeckError, NeckResult, NeckStream},
 };
 
 use super::super::{manager::ConnectingResult, NeckServer};

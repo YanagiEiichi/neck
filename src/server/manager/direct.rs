@@ -1,6 +1,6 @@
 use tokio::net::TcpStream;
 
-use crate::server::session_manager::Session;
+use crate::{server::session_manager::Session, utils::NeckStream};
 
 use super::{ConnectingResult, ConnectionManager, PBF};
 
@@ -12,7 +12,7 @@ impl ConnectionManager for DirectModeManager {
         Box::pin(async { 0 })
     }
 
-    fn join(&self, _stream: crate::neck::NeckStream) -> PBF<()> {
+    fn join(&self, _stream: NeckStream) -> PBF<()> {
         // There is nothing to do.
         // Joined connection will lose all references and will be recycled later.
         Box::pin(async move {})

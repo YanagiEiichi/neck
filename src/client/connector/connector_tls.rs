@@ -1,6 +1,6 @@
 use tokio::net::TcpStream;
 
-use crate::neck::NeckStream;
+use crate::utils::NeckStream;
 
 use super::{
     super::neck_url::NeckUrl,

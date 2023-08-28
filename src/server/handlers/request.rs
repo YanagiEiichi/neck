@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use tokio::io::AsyncBufReadExt;
 
-use crate::{neck::NeckStream, server::NeckServer, utils::NeckResult};
+use crate::{
+    server::NeckServer,
+    utils::{NeckResult, NeckStream},
+};
 
 use super::{http::http_handler, socks5::sock5_handler};
 

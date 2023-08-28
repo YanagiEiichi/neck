@@ -2,9 +2,8 @@ use std::{borrow::Cow, sync::Arc};
 
 use crate::{
     http::{HttpCommon, HttpRequest, HttpResponse},
-    neck::NeckStream,
     server::session_manager::Session,
-    utils::{NeckError, NeckResult},
+    utils::{NeckError, NeckResult, NeckStream},
 };
 
 use super::super::{manager::ConnectingResult, NeckServer};

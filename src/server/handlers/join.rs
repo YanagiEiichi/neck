@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     http::{HttpRequest, HttpResponse},
-    neck::NeckStream,
-    utils::NeckResult,
+    utils::{NeckResult, NeckStream},
 };
 
 use super::super::NeckServer;

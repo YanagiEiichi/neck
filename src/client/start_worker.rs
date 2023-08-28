@@ -8,8 +8,7 @@ use tokio::{
 
 use crate::{
     http::{HttpRequest, HttpResponse},
-    neck::NeckStream,
-    utils::{NeckError, NeckResult},
+    utils::{NeckError, NeckResult, NeckStream},
 };
 
 use super::{Event::*, NeckClient};

@@ -1,4 +1,4 @@
-use crate::{neck::NeckStream, utils::NeckResult, utils::PBF};
+use crate::utils::{NeckResult, NeckStream, PBF};
 
 mod connector_tcp;
 pub use connector_tcp::*;

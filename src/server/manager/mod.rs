@@ -1,7 +1,7 @@
 mod direct;
 mod pool;
 
-use crate::{neck::NeckStream, utils::PBF};
+use crate::utils::{NeckStream, PBF};
 
 pub use direct::*;
 pub use pool::*;

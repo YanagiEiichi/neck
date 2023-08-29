@@ -2,11 +2,14 @@ use std::{future::Future, pin::Pin, time::Duration};
 
 mod error;
 mod stream;
+mod supported_stream;
 
 pub use error::*;
 use socket2::{Socket, TcpKeepalive};
 pub use stream::*;
 use tokio::net::{TcpStream, ToSocketAddrs};
+
+pub use supported_stream::*;
 
 /// PBF = Pin Box Future
 pub type PBF<'a, O> = Pin<Box<dyn Future<Output = O> + Send + 'a>>;

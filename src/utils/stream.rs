@@ -1,21 +1,10 @@
-use std::{future::Future, net::SocketAddr, os::fd::FromRawFd, sync::Arc};
-
-#[cfg(unix)]
-use std::os::unix::io::AsRawFd;
-
-#[cfg(windows)]
-use std::os::windows::io::AsRawSocket;
+use std::{cell::UnsafeCell, future::Future, net::SocketAddr, pin::Pin, sync::Arc};
 
 use tokio::{
-    io::{
-        self, split, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter,
-    },
-    net::TcpStream,
+    io::{self, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter},
     select,
     sync::Mutex,
 };
-
-use tokio_native_tls::TlsStream;
 
 use crate::{
     http::{HttpProtocol, HttpRequest, HttpResponse},
@@ -23,31 +12,31 @@ use crate::{
     utils::NeckError,
 };
 
-use super::NeckResult;
-
-pub enum SupportedStream {
-    Tls(TlsStream<TcpStream>),
-    Tcp(TcpStream),
-}
-
-impl Into<SupportedStream> for TcpStream {
-    fn into(self) -> SupportedStream {
-        SupportedStream::Tcp(self)
-    }
-}
-
-impl Into<SupportedStream> for TlsStream<TcpStream> {
-    fn into(self) -> SupportedStream {
-        SupportedStream::Tls(self)
-    }
-}
+use super::{NeckResult, SupportedStream};
 
 pub struct NeckStream {
+    raw: Arc<Mutex<UnsafeCell<SupportedStream>>>,
+    pub reader: Arc<Mutex<BufReader<Box<dyn AsyncRead + Send + Unpin>>>>,
+    pub writer: Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
     pub peer_addr: SocketAddr,
     pub local_addr: SocketAddr,
-    pub writer: Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
-    pub reader: Arc<Mutex<BufReader<Box<dyn AsyncRead + Send + Unpin>>>>,
-    pub fd: i32,
+}
+
+impl<T: Into<SupportedStream>> From<T> for NeckStream {
+    fn from(stream: T) -> Self {
+        let raw = Arc::new(Mutex::new(UnsafeCell::new(stream.into())));
+        let ss = unsafe { Pin::new_unchecked(&mut *raw.try_lock().unwrap().get()) };
+        let peer_addr = ss.get_tcp_stream_ref().peer_addr().unwrap();
+        let local_addr = ss.get_tcp_stream_ref().local_addr().unwrap();
+        let (reader, writer) = SupportedStream::split(ss);
+        Self {
+            raw: raw.clone(),
+            writer: Mutex::new(writer),
+            reader: Arc::new(Mutex::new(BufReader::with_capacity(10240, reader))),
+            peer_addr,
+            local_addr,
+        }
+    }
 }
 
 impl NeckStream {
@@ -90,12 +79,17 @@ impl NeckStream {
         }
 
         // Try to peek raw TCP socket.
-        #[cfg(unix)]
-        let copy = unsafe { std::net::TcpStream::from_raw_fd(self.fd) };
-        #[cfg(windows)]
-        let copy = unsafe { std::net::TcpStream::from_raw_socket(self.fd) };
         let mut buf = Vec::new();
-        if TcpStream::from_std(copy)?.peek(&mut buf).await? == 0 {
+        if self
+            .raw
+            .lock()
+            .await
+            .get_mut()
+            .get_tcp_stream_ref()
+            .peek(&mut buf)
+            .await?
+            == 0
+        {
             return NeckError::wrap("Closed by peer");
         }
 
@@ -106,57 +100,6 @@ impl NeckStream {
         select! {
           v = task => Ok(v),
           v = self.wait_until_close() => v
-        }
-    }
-}
-
-impl SupportedStream {
-    fn split(
-        self,
-    ) -> (
-        Box<dyn AsyncRead + Unpin + Send>,
-        Box<dyn AsyncWrite + Unpin + Send>,
-    ) {
-        match self {
-            SupportedStream::Tls(s) => {
-                let (r, w) = split(s);
-                (Box::new(r), Box::new(w))
-            }
-            SupportedStream::Tcp(s) => {
-                let (r, w) = split(s);
-                (Box::new(r), Box::new(w))
-            }
-        }
-    }
-
-    fn get_basic_info(&self) -> (i32, SocketAddr, SocketAddr) {
-        let s = match self {
-            SupportedStream::Tls(s) => s.get_ref().get_ref().get_ref(),
-            SupportedStream::Tcp(s) => s,
-        };
-
-        #[cfg(unix)]
-        let fd = s.as_raw_fd();
-        #[cfg(windows)]
-        let fd = s.as_raw_socket();
-
-        (fd, s.peer_addr().unwrap(), s.local_addr().unwrap())
-    }
-}
-
-impl<T: Into<SupportedStream>> From<T> for NeckStream {
-    fn from(stream: T) -> Self {
-        let ss: SupportedStream = stream.into();
-
-        let (fd, peer_addr, local_addr) = ss.get_basic_info();
-        let (reader, writer) = ss.split();
-
-        Self {
-            fd,
-            peer_addr,
-            local_addr,
-            writer: Mutex::new(writer),
-            reader: Arc::new(Mutex::new(BufReader::with_capacity(10240, reader))),
         }
     }
 }

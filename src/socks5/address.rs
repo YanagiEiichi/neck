@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     io::ErrorKind,
     net::{Ipv4Addr, Ipv6Addr},
 };
@@ -49,12 +50,12 @@ impl Address {
     }
 }
 
-impl ToString for Address {
-    fn to_string(&self) -> String {
+impl Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Address::IPv4(value) => Ipv4Addr::from(*value).to_string(),
-            Address::Domain(domain) => domain.to_string(),
-            Address::IPv6(value) => Ipv6Addr::from(*value).to_string(),
+            Address::IPv4(value) => write!(f, "{}", Ipv4Addr::from(*value)),
+            Address::Domain(domain) => write!(f, "{}", domain),
+            Address::IPv6(value) => write!(f, "{}", Ipv6Addr::from(*value)),
         }
     }
 }

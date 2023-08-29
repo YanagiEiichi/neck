@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 
 use super::Address;
@@ -22,8 +24,8 @@ impl Host {
     }
 }
 
-impl ToString for Host {
-    fn to_string(&self) -> String {
-        format!("{}:{}", self.address.to_string(), self.port)
+impl Display for Host {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.address, self.port)
     }
 }

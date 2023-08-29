@@ -15,6 +15,8 @@ use tokio::{
     sync::Mutex,
 };
 
+use tokio_native_tls::TlsStream;
+
 use crate::{
     http::{HttpProtocol, HttpRequest, HttpResponse},
     socks5::Socks5Message,
@@ -22,6 +24,23 @@ use crate::{
 };
 
 use super::NeckResult;
+
+pub enum SupportedStream {
+    Tls(TlsStream<TcpStream>),
+    Tcp(TcpStream),
+}
+
+impl Into<SupportedStream> for TcpStream {
+    fn into(self) -> SupportedStream {
+        SupportedStream::Tcp(self)
+    }
+}
+
+impl Into<SupportedStream> for TlsStream<TcpStream> {
+    fn into(self) -> SupportedStream {
+        SupportedStream::Tls(self)
+    }
+}
 
 pub struct NeckStream {
     pub peer_addr: SocketAddr,
@@ -32,20 +51,6 @@ pub struct NeckStream {
 }
 
 impl NeckStream {
-    pub fn new<T>(peer_addr: SocketAddr, local_addr: SocketAddr, stream: T, fd: i32) -> Self
-    where
-        T: AsyncRead + AsyncWrite + Send + Unpin + 'static,
-    {
-        let (r, w) = split(stream);
-        Self {
-            peer_addr,
-            local_addr,
-            writer: Mutex::new(Box::new(w)),
-            reader: Arc::new(Mutex::new(BufReader::with_capacity(10240, Box::new(r)))),
-            fd,
-        }
-    }
-
     /// Weld with another NeckStream (Start a bidirectional stream copy).
     /// After welding, do not use these streams elsewhere because both streams will be fully consumed.
     pub async fn weld(&self, upstream: &Self) {
@@ -105,17 +110,54 @@ impl NeckStream {
     }
 }
 
-impl From<TcpStream> for NeckStream {
-    fn from(stream: TcpStream) -> Self {
-        let peer_addr = stream.peer_addr().unwrap();
-        let local_addr = stream.local_addr().unwrap();
+impl SupportedStream {
+    fn split(
+        self,
+    ) -> (
+        Box<dyn AsyncRead + Unpin + Send>,
+        Box<dyn AsyncWrite + Unpin + Send>,
+    ) {
+        match self {
+            SupportedStream::Tls(s) => {
+                let (r, w) = split(s);
+                (Box::new(r), Box::new(w))
+            }
+            SupportedStream::Tcp(s) => {
+                let (r, w) = split(s);
+                (Box::new(r), Box::new(w))
+            }
+        }
+    }
+
+    fn get_basic_info(&self) -> (i32, SocketAddr, SocketAddr) {
+        let s = match self {
+            SupportedStream::Tls(s) => s.get_ref().get_ref().get_ref(),
+            SupportedStream::Tcp(s) => s,
+        };
 
         #[cfg(unix)]
-        let fd = stream.as_raw_fd();
+        let fd = s.as_raw_fd();
         #[cfg(windows)]
-        let fd = stream.as_raw_socket();
+        let fd = s.as_raw_socket();
 
-        Self::new(peer_addr, local_addr, stream, fd)
+        (fd, s.peer_addr().unwrap(), s.local_addr().unwrap())
+    }
+}
+
+impl<T: Into<SupportedStream>> From<T> for NeckStream {
+    fn from(stream: T) -> Self {
+        let ss: SupportedStream = stream.into();
+
+        let (fd, peer_addr, local_addr) = ss.get_basic_info();
+        let (reader, writer) = ss.split();
+
+        Self {
+            fd,
+            peer_addr,
+            local_addr,
+            writer: Mutex::new(writer),
+            reader: Arc::new(Mutex::new(BufReader::with_capacity(10240, reader))),
+        }
     }
 }
 

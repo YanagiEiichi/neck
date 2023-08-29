@@ -1,4 +1,4 @@
-use std::{process::exit, sync::Arc};
+use std::sync::Arc;
 
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
@@ -8,28 +8,15 @@ use tokio::sync::{
 use crate::utils::{NeckResult, NeckStream};
 
 use super::{
-    connector::Connector, neck_url::NeckUrl, start_worker::start_worker, token_bucket::TokenBucket,
+    connector::{Connector, TcpConnector, TlsConnector},
+    neck_url::NeckUrl,
+    start_worker::start_worker,
+    token_bucket::TokenBucket,
 };
 
-use super::connector::TcpConnector;
-
-#[cfg(feature = "tls")]
-use super::connector::TlsConnector;
-
-fn create_connector(
-    url: &NeckUrl,
-    #[allow(unused_variables)] tls_domain: Option<String>,
-) -> Box<dyn Connector> {
-    let tls = url.is_https();
-
-    #[cfg(feature = "tls")]
-    if tls {
+fn create_connector(url: &NeckUrl, tls_domain: Option<String>) -> Box<dyn Connector> {
+    if url.is_https() {
         return Box::new(TlsConnector::new(url, tls_domain));
-    }
-    // If tls is enabled, but the tls feature is not enable, print an error message and exit the process.
-    if tls {
-        eprintln!("The 'https:' is not supported.");
-        exit(1);
     }
     Box::new(TcpConnector::new(url))
 }

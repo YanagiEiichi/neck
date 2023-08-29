@@ -10,12 +10,11 @@ env:
 
 jobs:
   publish:
-    name: Publish for ${{ matrix.os }} with feature ${{ matrix.feature }}
+    name: Publish for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         name: [linux, windows, macos]
-        feature: ["default", "tls"]
         include:
           - name: linux
             os: ubuntu-latest
@@ -36,8 +35,8 @@ jobs:
         run: |
           sudo apt install -y musl-tools --no-install-recommends
           rustup target add x86_64-unknown-linux-musl
-      - run: cargo build --release --features ${{ matrix.feature }} --locked --target ${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v3
         with:
-          name: neck-${{ matrix.feature }}-${{ matrix.name }}
+          name: neck-${{ matrix.name }}
           path: target/${{ matrix.target }}/release/${{ matrix.filename }}

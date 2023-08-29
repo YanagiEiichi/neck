@@ -90,7 +90,7 @@ impl PoolModeManager {
         }
 
         // Insert the `stream` into the pool (ownership has been moved).
-        let addr = stream.peer_addr.clone();
+        let addr = stream.peer_addr;
         s.insert(addr, stream);
 
         // When a stream is inserted to the pool, notify a waiting routine to attempt to retrieval.
@@ -172,7 +172,7 @@ impl ConnectionManager for PoolModeManager {
     fn join(&self, stream: NeckStream) -> PBF<()> {
         Box::pin(async {
             // The NeckStream will be moved later, so we need to clone necessary properties before moving.
-            let addr = stream.peer_addr.clone();
+            let addr = stream.peer_addr;
 
             // Try to join the pool, if it is failed not, return this function.
             if !self.try_insert(stream).await {

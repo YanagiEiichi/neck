@@ -18,8 +18,8 @@ pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResu
         ConnectingResult::Ok(upstream) => {
             println!(
                 "[{}] Connect to {} for {} [socks5]",
-                stream.peer_addr.to_string(),
-                upstream.peer_addr.to_string(),
+                stream.peer_addr,
+                upstream.peer_addr,
                 req.host.to_string()
             );
             req.clone().set_action(0).write_to_stream(&stream).await?;
@@ -30,7 +30,7 @@ pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResu
         ConnectingResult::BadGateway() => {
             println!(
                 "[{}] No available connections for {}",
-                stream.peer_addr.to_string(),
+                stream.peer_addr,
                 req.host.to_string()
             );
             req.clone().set_action(1).write_to_stream(&stream).await?;
@@ -38,7 +38,7 @@ pub async fn sock5_handler(stream: NeckStream, ctx: Arc<NeckServer>) -> NeckResu
         ConnectingResult::ServiceUnavailable(_) => {
             println!(
                 "[{}] Failed to connect {}",
-                stream.peer_addr.to_string(),
+                stream.peer_addr,
                 req.host.to_string()
             );
             req.clone().set_action(1).write_to_stream(&stream).await?;

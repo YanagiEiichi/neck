@@ -21,8 +21,7 @@ async fn connect_upstream(
         ConnectingResult::BadGateway() => {
             println!(
                 "[{}] No available connections for {}",
-                stream.peer_addr.to_string(),
-                session.host
+                stream.peer_addr, session.host
             );
 
             HttpResponse::new(502, "Bad Gateway", version)
@@ -36,11 +35,7 @@ async fn connect_upstream(
 
         // Cannot establish a connection with the provided host.
         ConnectingResult::ServiceUnavailable(msg) => {
-            println!(
-                "[{}] Failed to connect {}",
-                stream.peer_addr.to_string(),
-                session.host
-            );
+            println!("[{}] Failed to connect {}", stream.peer_addr, session.host);
 
             HttpResponse::new(503, "Service Unavailable", version)
                 .add_payload(msg.as_bytes())
@@ -70,8 +65,8 @@ pub async fn https_proxy_handler(
 
     println!(
         "[{}] Connect to {} for {}",
-        stream.peer_addr.to_string(),
-        upstream.peer_addr.to_string(),
+        stream.peer_addr,
+        upstream.peer_addr,
         req.get_uri()
     );
 
@@ -121,9 +116,7 @@ pub async fn http_proxy_handler(
 
     println!(
         "[{}] Connect to {} for http://{}",
-        stream.peer_addr.to_string(),
-        upstream.peer_addr.to_string(),
-        host
+        stream.peer_addr, upstream.peer_addr, host
     );
 
     // Send an HTTP request (with the host part removed from original URI, leaving only the path part).

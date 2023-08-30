@@ -1,6 +1,8 @@
 mod direct;
 mod pool;
 
+use std::sync::Arc;
+
 use crate::utils::{NeckStream, PBF};
 
 pub use direct::*;
@@ -9,7 +11,7 @@ pub use pool::*;
 use super::session_manager::Session;
 
 pub enum ConnectingResult {
-    Ok(NeckStream),
+    Ok(Arc<NeckStream>),
     BadGateway(),
     ServiceUnavailable(String),
 }

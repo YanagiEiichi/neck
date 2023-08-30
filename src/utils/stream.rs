@@ -16,7 +16,7 @@ use super::{NeckResult, SupportedStream};
 
 pub struct NeckStream {
     raw: Arc<Mutex<UnsafeCell<SupportedStream>>>,
-    pub reader: Arc<Mutex<BufReader<Box<dyn AsyncRead + Send + Unpin>>>>,
+    pub reader: Mutex<BufReader<Box<dyn AsyncRead + Send + Unpin>>>,
     pub writer: Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
     pub peer_addr: SocketAddr,
     pub local_addr: SocketAddr,
@@ -32,7 +32,7 @@ impl<T: Into<SupportedStream>> From<T> for NeckStream {
         Self {
             raw: raw.clone(),
             writer: Mutex::new(writer),
-            reader: Arc::new(Mutex::new(BufReader::with_capacity(10240, reader))),
+            reader: Mutex::new(BufReader::with_capacity(10240, reader)),
             peer_addr,
             local_addr,
         }

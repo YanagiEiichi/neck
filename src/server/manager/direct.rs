@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     server::session_manager::Session,
     utils::{connect, NeckStream},
@@ -23,7 +25,7 @@ impl ConnectionManager for DirectModeManager {
         Box::pin(async move {
             // Pass through the tokio TcpStream::connect.
             match connect(&session.host).await {
-                Ok(stream) => ConnectingResult::Ok(stream.into()),
+                Ok(stream) => ConnectingResult::Ok(Arc::new(stream.into())),
                 Err(e) => ConnectingResult::ServiceUnavailable(e.to_string()),
             }
         })

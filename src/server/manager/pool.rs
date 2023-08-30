@@ -17,7 +17,7 @@ use super::{ConnectingResult, ConnectionManager, PBF};
 
 pub struct PoolModeManager {
     size: usize,
-    storage: Arc<Mutex<HashMap<SocketAddr, NeckStream>>>,
+    storage: Arc<Mutex<HashMap<SocketAddr, Arc<NeckStream>>>>,
     // TODO: rename
     notify: Arc<Notify>,
 }
@@ -31,7 +31,7 @@ impl PoolModeManager {
         }
     }
 
-    async fn take(&self) -> Option<NeckStream> {
+    async fn take(&self) -> Option<Arc<NeckStream>> {
         // Declare a deadline.
         let deadline = Instant::now().add(Duration::from_secs(5));
         loop {
@@ -54,7 +54,7 @@ impl PoolModeManager {
         }
     }
 
-    async fn take_and_send_connect(&self, uri: &str) -> Option<NeckStream> {
+    async fn take_and_send_connect(&self, uri: &str) -> Option<Arc<NeckStream>> {
         // This is a retry loop, where certain operations can be retried, with a maximum of 5 retry attempts.
         for _ in 1..=5 {
             // Take a item from pool without retry.
@@ -80,7 +80,7 @@ impl PoolModeManager {
 
     /// Try to insert a `stream` to the pool and send a notification if fuccessful.
     /// If the pool is already full, the `stream` will be dropped.
-    async fn try_insert(&self, stream: NeckStream) -> bool {
+    async fn try_insert(&self, stream: Arc<NeckStream>) -> bool {
         let mut s = self.storage.lock().await;
 
         // Check the pool size, if it is already full, return false directly.
@@ -111,8 +111,8 @@ impl PoolModeManager {
     ///
     async fn initiate_health_check_loop(&self, addr: SocketAddr) {
         // Get the reader pointer.
-        let reader = match self.storage.lock().await.get(&addr) {
-            Some(stream) => stream.reader.clone(),
+        let stream = match self.storage.lock().await.get(&addr) {
+            Some(s) => s.clone(),
             None => return,
         };
 
@@ -127,7 +127,7 @@ impl PoolModeManager {
                 // Set a maximum waiting duration.
                 Duration::from_secs(secs),
                 // The `fill_buf` method will wait if its buffer is empty.
-                reader.lock().await.fill_buf(),
+                stream.reader.lock().await.fill_buf(),
             )
             .await
             {
@@ -175,7 +175,7 @@ impl ConnectionManager for PoolModeManager {
             let addr = stream.peer_addr;
 
             // Try to join the pool, if it is failed not, return this function.
-            if !self.try_insert(stream).await {
+            if !self.try_insert(Arc::new(stream)).await {
                 return;
             }
 

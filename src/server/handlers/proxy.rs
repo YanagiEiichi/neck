@@ -13,7 +13,7 @@ async fn connect_upstream(
     session: &Session,
     version: &str,
     ctx: &Arc<NeckServer>,
-) -> NeckResult<NeckStream> {
+) -> NeckResult<Arc<NeckStream>> {
     match stream.wait_toggle(ctx.manager.connect(session)).await? {
         ConnectingResult::Ok(v) => Ok(v),
 

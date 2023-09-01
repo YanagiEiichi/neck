@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, future::Future, net::SocketAddr, pin::Pin, sync::Arc};
+use std::{cell::UnsafeCell, future::Future, net::SocketAddr, pin::Pin, sync::Arc, marker::PhantomPinned};
 
 use tokio::{
     io::{self, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter},
@@ -16,10 +16,17 @@ use super::{NeckResult, SupportedStream};
 
 pub struct NeckStream {
     raw: Arc<Mutex<UnsafeCell<SupportedStream>>>,
+
     pub reader: Mutex<BufReader<Box<dyn AsyncRead + Send + Unpin>>>,
     pub writer: Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
+
     pub peer_addr: SocketAddr,
     pub local_addr: SocketAddr,
+
+    // Pin this struct to prevent any properties from being taken out.
+    // Because this struct contains unsafe pointers.
+    // The `reader`, and `writer` refer to `raw`.
+    _pinned: PhantomPinned,
 }
 
 impl<T: Into<SupportedStream>> From<T> for NeckStream {
@@ -35,6 +42,7 @@ impl<T: Into<SupportedStream>> From<T> for NeckStream {
             reader: Mutex::new(BufReader::with_capacity(10240, reader)),
             peer_addr,
             local_addr,
+            _pinned: PhantomPinned,
         }
     }
 }

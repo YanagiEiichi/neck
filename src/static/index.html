@@ -14,6 +14,18 @@
     border: 1px solid #eee;
   }
 
+  header {
+    border: 1px solid #eee;
+    background: #fafafa;
+    padding: 0.5em 1em;
+    margin-bottom: 1em;
+  }
+
+  header var {
+    font-weight: bold;
+    font-style: normal;
+  }
+
   tr:first-child {
     background: #fafafa;
     font-weight: bold;
@@ -22,21 +34,21 @@
 <script type="module">
   import { dataService } from "./dataService.js";
 
+  const renderState = (s) => {
+    switch (s) {
+      case 0:
+        return `<b style="color: gray;">Waiting</b>`;
+      case 1:
+        return `<b style="color: gray;">Connecting</b>`;
+      case 2:
+        return `<b style="color: green;">Established</b>`;
+      default:
+        return `<b style="color: red;">Unknown</b>`;
+    }
+  };
+
   const renderTable = async () => {
     const table = document.createElement("table");
-
-    const renderState = (s) => {
-      switch (s) {
-        case 0:
-          return `<b style="color: gray;">Waiting</b>`;
-        case 1:
-          return `<b style="color: gray;">Connecting</b>`;
-        case 2:
-          return `<b style="color: green;">Established</b>`;
-        default:
-          return `<b style="color: red;">Unknown</b>`;
-      }
-    };
 
     const renderTime = (timestamp) => {
       const el = document.createElement("time");
@@ -98,6 +110,26 @@
 
   const renderHeader = () => {
     let header = document.createElement("header");
+    let length = 3;
+
+    const a = Array.from({ length }, (_, index) => {
+      if (index) header.appendChild(new Text(", "));
+      header.insertAdjacentHTML("beforeEnd", renderState(index));
+      header.appendChild(new Text(": "));
+      let v = document.createElement("var");
+      v.textContent = 0;
+      header.appendChild(v);
+      return v;
+    });
+
+    dataService.addEventListener("update", (e) => {
+      const { detail } = e;
+      let map = Array(length).fill(0);
+      detail.forEach((i) => map[i.state]++);
+      map.forEach((v, i) => {
+        a[i].innerHTML = v;
+      });
+    });
 
     document.body.append(header);
   };

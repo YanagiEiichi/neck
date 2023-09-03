@@ -20,49 +20,6 @@
   }
 </style>
 <script>
-  const table = document.createElement("table");
-
-  const renderState = (s) => {
-    switch (s) {
-      case 0:
-        return `<b style="color: gray;">Waiting</b>`;
-      case 1:
-        return `<b style="color: gray;">Connecting</b>`;
-      case 2:
-        return `<b style="color: green;">Established</b>`;
-      default:
-        return `<b style="color: red;">Unknown</b>`;
-    }
-  };
-
-  const renderTime = (timestamp) => {
-    const el = document.createElement("time");
-    let value = () => Math.floor((Date.now() - timestamp) / 1000) + "s";
-    el.innerHTML = value();
-    let timer = setInterval(() => {
-      if (!el.parentNode) return clearInterval(timer);
-      el.innerHTML = value();
-    }, 100);
-    return el;
-  };
-
-  const createRow = (data) => {
-    const row = table.insertRow();
-    row.dataset.id = data.id;
-    const cells = Array.from({ length: 6 }, () => row.insertCell());
-    row.update = (data) => {
-      cells[0].textContent = data.id;
-      cells[1].textContent = data.proto;
-      cells[2].innerHTML = renderState(data.state);
-      cells[3].textContent = data.host;
-      cells[4].textContent = data.from;
-      cells[5].innerHTML = "";
-      cells[5].appendChild(renderTime(data.timestamp));
-    };
-    row.update(data);
-    return row;
-  };
-
   function singleFlight(asyncFunc) {
     let tasks = [];
     const push = () => {
@@ -83,42 +40,121 @@
     };
   }
 
-  const update = singleFlight(async () => {
-    return fetch("api/sessions")
-      .then((res) => res.json())
-      .then((list) => {
-        let m = new Map(list.map((i) => [String(i.id), i]));
-        let { rows } = table;
-        for (let i = 1; i < rows.length; i++) {
-          let row = rows[i];
-          let data = m.get(row.dataset.id);
-          if (data) {
-            m.delete(row.dataset.id);
-            row.update(data);
-          } else {
-            row.remove();
-            i--;
-          }
-        }
-        for (const data of m.values()) {
-          createRow(data);
-        }
-      });
-  });
+  class DataService {
+    constructor() {
+      this.#keeper();
+    }
 
-  const initiateEventSource = singleFlight(
-    () =>
-      new Promise((resolve, reject) => {
-        let es = new EventSource("api/events");
-        es.addEventListener("update", update);
-        es.addEventListener("error", () => {
-          es.close();
-          reject();
+    #et = new EventTarget();
+
+    addEventListener(...args) {
+      return this.#et.addEventListener(...args);
+    }
+    removeEventListener(...args) {
+      return this.#et.removeEventListener(...args);
+    }
+
+    async #keeper() {
+      for (;;) {
+        try {
+          this.#update();
+          await this.#initiateEventSource();
+        } catch (e) {
+          void e;
+        }
+        await new Promise((f) => setTimeout(f, 1000));
+      }
+    }
+
+    #update = singleFlight(async () => {
+      return fetch("api/sessions")
+        .then((res) => res.json())
+        .then((list) => {
+          this.#et.dispatchEvent(new CustomEvent("update", { detail: list }));
         });
-      })
-  );
+    });
 
-  const main = async () => {
+    #initiateEventSource = singleFlight(
+      () =>
+        new Promise((resolve, reject) => {
+          let es = new EventSource("api/events");
+          es.addEventListener("update", this.#update);
+          es.addEventListener("error", () => {
+            es.close();
+            reject();
+          });
+        })
+    );
+  }
+
+  const dataService = new DataService();
+
+  import { dataService } from "./dataService.js";
+
+  const renderTable = async () => {
+    const table = document.createElement("table");
+
+    const renderState = (s) => {
+      switch (s) {
+        case 0:
+          return `<b style="color: gray;">Waiting</b>`;
+        case 1:
+          return `<b style="color: gray;">Connecting</b>`;
+        case 2:
+          return `<b style="color: green;">Established</b>`;
+        default:
+          return `<b style="color: red;">Unknown</b>`;
+      }
+    };
+
+    const renderTime = (timestamp) => {
+      const el = document.createElement("time");
+      let value = () => Math.floor((Date.now() - timestamp) / 1000) + "s";
+      el.innerHTML = value();
+      let timer = setInterval(() => {
+        if (!el.parentNode) return clearInterval(timer);
+        el.innerHTML = value();
+      }, 100);
+      return el;
+    };
+
+    const createRow = (data) => {
+      const row = table.insertRow();
+      row.dataset.id = data.id;
+      const cells = Array.from({ length: 6 }, () => row.insertCell());
+      row.update = (data) => {
+        cells[0].textContent = data.id;
+        cells[1].textContent = data.proto;
+        cells[2].innerHTML = renderState(data.state);
+        cells[3].textContent = data.host;
+        cells[4].textContent = data.from;
+        cells[5].innerHTML = "";
+        cells[5].appendChild(renderTime(data.timestamp));
+      };
+      row.update(data);
+      return row;
+    };
+
+    dataService.addEventListener("update", (e) => {
+      let list = e.detail;
+      let m = new Map(list.map((i) => [String(i.id), i]));
+      let { rows } = table;
+      for (let i = 1; i < rows.length; i++) {
+        let row = rows[i];
+        let data = m.get(row.dataset.id);
+        if (data) {
+          m.delete(row.dataset.id);
+          row.update(data);
+        } else {
+          row.remove();
+          i--;
+        }
+      }
+      for (const data of m.values()) {
+        createRow(data);
+      }
+    });
+
     let row = table.insertRow();
     row.insertCell().textContent = "ID";
     row.insertCell().textContent = "Type";
@@ -127,16 +163,17 @@
     row.insertCell().textContent = "From";
     row.insertCell().textContent = "Uptime";
     document.body.append(table);
+  };
 
-    for (;;) {
-      try {
-        update();
-        await initiateEventSource();
-      } catch (e) {
-        void e;
-      }
-      await new Promise((f) => setTimeout(f, 1000));
-    }
+  const renderHeader = () => {
+    let header = document.createElement("header");
+
+    document.body.append(header);
+  };
+
+  const main = async () => {
+    renderHeader();
+    renderTable();
   };
 
   document.body ? main() : addEventListener("load", main);

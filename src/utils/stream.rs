@@ -94,7 +94,7 @@ impl NeckStream {
     /// Perform a quick check using the standard `fill_buf` method of `BufReader`.
     /// This method will wait until any bytes are received from system buffer, unless it receives an EOF.
     /// Therefore, if this buffer is empty, it indicates that this connection has been closed by peer.
-    async fn quick_check_eof(&self) -> NeckResult<()> {
+    pub async fn quick_check_eof(&self) -> NeckResult<()> {
         let mut reader = self.reader.lock().await;
         let buf = reader.fill_buf().await?;
         if buf.is_empty() {

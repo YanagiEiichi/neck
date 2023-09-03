@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Add, sync::Arc, time::Duration};
 
-use rand::Rng;
+use rand::{thread_rng, Rng};
 use tokio::{
     sync::{Mutex, Notify},
     time::{timeout, timeout_at, Instant},
@@ -102,11 +102,7 @@ impl PoolModeManager {
     ///
     /// Firstly, we need to keep the `stream` being reading, because we must know a FIN packet received.
     /// When a FIN packet is received, this indicates that the `stream` has closed,
-    /// and we should remove this `stream` from the pool to prevent it from being used in other routines.
-    ///
-    /// However, merely reading the `stream` is insufficient in this context.
-    /// Because a FIN packet might be lose in the network, the TCP connection could be "dead".
-    /// Therefore, we should initiate a health check loop to identify this "dead" scenario.
+    /// If a connection is closed by peer, it will be remove fastly, to prevent it from being used in other routines.
     ///
     async fn initiate_health_check_loop(&self, addr: SocketAddr) {
         // Get the reader pointer.
@@ -119,21 +115,15 @@ impl PoolModeManager {
         loop {
             // If the `reader` receives anything, remove it from the pool and stop the health check loop.
             // There are two cases for this:
-            // 1. The `stream`, which is still in the pool, receives an EOF from peer.
+            // 1. The `stream`, which is still in the pool, but closed by peer.
             // 2. The `stream` has been taken out by another routine, and has been used.
-            let secs = rand::thread_rng().gen_range(60..120);
-            if let Ok(_) = timeout(
-                // Set a maximum waiting duration.
-                Duration::from_secs(secs),
-                // The `fill_buf` method will wait if its buffer is empty.
-                stream.wait_until_close::<()>(),
-            )
-            .await
-            {
-                // It probably has already been removed by another routine, but we do not care about that.
+            let secs = thread_rng().gen_range(60..120);
+            // If this connection has closed by peer.
+            if let Ok(Err(_)) = timeout(Duration::from_secs(secs), stream.quick_check_eof()).await {
+                // It probably has already been removed by another routine, but do not care about that.
                 self.storage.lock().await.remove(&addr);
                 break;
-            };
+            }
 
             // Otherwise, nothing to receive, just timing out.
 

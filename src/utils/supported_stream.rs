@@ -12,11 +12,11 @@ pub enum SupportedStream {
 }
 
 impl SupportedStream {
-    pub fn split(
-        self: Pin<&mut Self>,
+    pub fn split<'a>(
+        self: Pin<&'a mut Self>,
     ) -> (
-        Box<dyn AsyncRead + Unpin + Send + '_>,
-        Box<dyn AsyncWrite + Unpin + Send + '_>,
+        Box<dyn AsyncRead + Unpin + Send + 'a>,
+        Box<dyn AsyncWrite + Unpin + Send + 'a>,
     ) {
         match self.get_mut() {
             SupportedStream::Tls(s) => {

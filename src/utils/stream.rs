@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, future::Future, net::SocketAddr, pin::Pin, sync::Arc, marker::PhantomPinned};
+use std::{cell::UnsafeCell, future::Future, marker::PhantomPinned, net::SocketAddr, pin::Pin};
 
 use tokio::{
     io::{self, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter},
@@ -15,7 +15,7 @@ use crate::{
 use super::{NeckResult, SupportedStream};
 
 pub struct NeckStream {
-    raw: Arc<Mutex<UnsafeCell<SupportedStream>>>,
+    raw: Mutex<Box<UnsafeCell<SupportedStream>>>,
 
     pub reader: Mutex<BufReader<Box<dyn AsyncRead + Send + Unpin>>>,
     pub writer: Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
@@ -31,13 +31,24 @@ pub struct NeckStream {
 
 impl<T: Into<SupportedStream>> From<T> for NeckStream {
     fn from(stream: T) -> Self {
-        let raw = Arc::new(Mutex::new(UnsafeCell::new(stream.into())));
-        let ss = unsafe { Pin::new_unchecked(&mut *raw.try_lock().unwrap().get()) };
+        let ss = stream.into();
         let peer_addr = ss.get_tcp_stream_ref().peer_addr().unwrap();
         let local_addr = ss.get_tcp_stream_ref().local_addr().unwrap();
-        let (reader, writer) = SupportedStream::split(ss);
+
+        // The UnsafeCell is currently on the stack, wrap it with a `Box` in order to move it to the heap.
+        // This is an important operation since this pointer will be moved to the `Mutex` as a property of NeckStream.
+        // The move operation will change its pointer address,
+        // resulting in the unsafe dereference operation leading to a bad memory location.
+        let buss = Box::new(UnsafeCell::new(ss));
+
+        let (reader, writer) = SupportedStream::split(unsafe {
+            // Pin this value to prevent moving the pointer out.
+            // The UnsafeCell pointer must not be moved out.
+            Pin::new_unchecked(&mut *buss.get())
+        });
+
         Self {
-            raw: raw.clone(),
+            raw: Mutex::new(buss),
             writer: Mutex::new(writer),
             reader: Mutex::new(BufReader::with_capacity(10240, reader)),
             peer_addr,

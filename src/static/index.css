@@ -1,0 +1,50 @@
+body {
+  font-family: "Helvetica Neue", Arial;
+  color: #333;
+}
+table {
+  box-sizing: border-box;
+  border-collapse: collapse;
+  width: 100%;
+}
+td {
+  padding: 0.5em 1em;
+  border: 1px solid #eee;
+}
+
+header {
+  border: 1px solid #eee;
+  background: #fafafa;
+  padding: 0.5em 1em;
+  margin-bottom: 1em;
+}
+
+header var {
+  font-weight: bold;
+  font-style: normal;
+}
+
+header .activityState {
+  float: right;
+}
+
+header .activityState::before {
+  content: "";
+  width: 1em;
+  height: 1em;
+  display: block;
+  border-radius: 100%;
+}
+
+header .activityState.active::before {
+  background: green;
+}
+
+header .activityState.inactive::before {
+  background: darkred;
+}
+
+tr:first-child {
+  background: #fafafa;
+  font-weight: bold;
+}

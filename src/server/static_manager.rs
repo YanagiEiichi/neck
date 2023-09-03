@@ -18,6 +18,7 @@ impl StaticMatcher {
         match path.rfind('.').map(|p| &path[p + 1..]) {
             Some("js") => "application/javascript",
             Some("html") => "text/html",
+            Some("css") => "text/css",
             None => "text/html",
             _ => "text/plain",
         }
@@ -50,6 +51,8 @@ pub fn get_static_matcher() -> &'static StaticMatcher {
           let matcher = StaticMatcher::new()
               .add_route("/dashboard", include_bytes!("../static/index.html"))
               .add_route("/utils.js", include_bytes!("../static/utils.js"))
+              .add_route("/index.js", include_bytes!("../static/index.js"))
+              .add_route("/index.css", include_bytes!("../static/index.css"))
               .add_route(
                   "/dataService.js",
                   include_bytes!("../static/dataService.js"),

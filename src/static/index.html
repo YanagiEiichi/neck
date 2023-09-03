@@ -26,6 +26,26 @@
     font-style: normal;
   }
 
+  header .activityState {
+    float: right;
+  }
+
+  header .activityState::before {
+    content: "";
+    width: 1em;
+    height: 1em;
+    display: block;
+    border-radius: 100%;
+  }
+
+  header .activityState.active::before {
+    background: green;
+  }
+
+  header .activityState.inactive::before {
+    background: darkred;
+  }
+
   tr:first-child {
     background: #fafafa;
     font-weight: bold;
@@ -120,6 +140,19 @@
       v.textContent = 0;
       header.appendChild(v);
       return v;
+    });
+
+    let activityState = document.createElement("div");
+    activityState.className = "activityState";
+    header.appendChild(activityState);
+    dataService.addEventListener("active", (e) => {
+      activityState.classList.add("active");
+      activityState.classList.remove("inactive");
+    });
+
+    dataService.addEventListener("inactive", (e) => {
+      activityState.classList.remove("active");
+      activityState.classList.add("inactive");
     });
 
     dataService.addEventListener("update", (e) => {

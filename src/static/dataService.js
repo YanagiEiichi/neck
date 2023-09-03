@@ -36,10 +36,14 @@ class DataService {
 
   #initiateEventSource = singleFlight(
     () =>
-      new Promise((resolve, reject) => {
+      new Promise((_, reject) => {
         let es = new EventSource("api/events");
+        es.addEventListener("open", () => {
+          this.#et.dispatchEvent(new CustomEvent("active"));
+        });
         es.addEventListener("update", this.#update);
         es.addEventListener("error", () => {
+          this.#et.dispatchEvent(new CustomEvent("inactive"));
           es.close();
           reject();
         });

@@ -1,15 +1,14 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Add, sync::Arc, time::Duration};
 
-use rand::{thread_rng, Rng};
 use tokio::{
     sync::{Mutex, Notify},
-    time::{timeout, timeout_at, Instant},
+    time::{timeout_at, Instant},
 };
 
 use crate::{
     http::{HttpCommon, HttpRequest, HttpResponse},
     server::session_manager::Session,
-    utils::{NeckError, NeckResult, NeckStream},
+    utils::NeckStream,
 };
 
 use super::{ConnectingResult, ConnectionManager, PBF};
@@ -97,56 +96,23 @@ impl PoolModeManager {
         true
     }
 
-    /// Keep the `stream` alive while it lives in the pool.
-    ///
-    /// Firstly, we need to keep the `stream` being reading, because we must know a FIN packet received.
-    /// When a FIN packet is received, this indicates that the `stream` has closed,
     /// If a connection is closed by peer, it will be remove fastly, to prevent it from being used in other routines.
-    ///
-    async fn initiate_health_check_loop(&self, addr: SocketAddr) {
+    async fn wait_close_or_use(&self, addr: SocketAddr) {
         // Get the reader pointer.
         let stream = match self.storage.lock().await.get(&addr) {
             Some(s) => s.clone(),
             None => return,
         };
 
-        // Initiate the health check loop.
-        loop {
-            // If the `reader` receives anything, remove it from the pool and stop the health check loop.
-            // There are two cases for this:
-            // 1. The `stream`, which is still in the pool, but closed by peer.
-            // 2. The `stream` has been taken out by another routine, and has been used.
-            let secs = thread_rng().gen_range(60..120);
-            // If this connection has closed by peer.
-            if let Ok(Err(_)) = timeout(Duration::from_secs(secs), stream.quick_check_eof()).await {
-                // It probably has already been removed by another routine, but do not care about that.
-                self.storage.lock().await.remove(&addr);
-                break;
-            }
+        // If the `reader` receives anything, remove it from the pool and stop the health check loop.
+        // There are two cases for this:
+        // 1. The `stream`, which is still in the pool, but closed by peer.
+        // 2. The `stream` has been taken out by another routine, and has been used.
+        // If this connection has closed by peer.
+        let _ = stream.quick_check_eof().await;
 
-            // Otherwise, nothing to receive, just timing out.
-
-            // Try to take out the stream from pool.
-            // If it has already been removed by another routine, stop the health check loop immediately.
-            let stream = match self.storage.lock().await.remove(&addr) {
-                Some(v) => v,
-                None => break,
-            };
-
-            // Execute an HTTP health check.
-            // If it is failed, stop the health check loop immediately.
-            if let Err(_) = send_ping_and_assert_pong(&stream).await {
-                // In this case, the `stream` will not be inserted back into the pool.
-                // While this stack is exited, the `stream` will be dropped.
-                break;
-            }
-
-            // Insert the `stream` back into the pool.
-            // If the operation fails (for example, if the pool is full capacity), the `stream` will be dropped.
-            if !self.try_insert(stream).await {
-                break;
-            }
-        }
+        // It probably has already been removed by another routine, but do not care about that.
+        self.storage.lock().await.remove(&addr);
     }
 }
 
@@ -168,7 +134,8 @@ impl ConnectionManager for PoolModeManager {
             }
 
             // Otherwise, the stream has joined the pool.
-            self.initiate_health_check_loop(addr).await;
+
+            self.wait_close_or_use(addr).await;
         })
     }
 
@@ -205,20 +172,4 @@ impl ConnectionManager for PoolModeManager {
             return ConnectingResult::Ok(stream);
         })
     }
-}
-
-/// Send a PING request and assert a PONG response.
-async fn send_ping_and_assert_pong(stream: &NeckStream) -> NeckResult<()> {
-    // Send PING request.
-    HttpRequest::new("PING", "*", "HTTP/1.1")
-        .write_to_stream(&stream)
-        .await?;
-
-    // Receive response and assert status code 204.
-    let res = HttpResponse::read_from(stream).await?;
-    if res.get_status() != 204 {
-        NeckError::wrap("Got non-204 status when PING")?
-    }
-
-    Ok(())
 }

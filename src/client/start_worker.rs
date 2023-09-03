@@ -23,13 +23,6 @@ async fn wait_until_http_proxy_connect(stream: &NeckStream) -> NeckResult<HttpRe
             // If method is "CONNECT" return the `req` directly.
             "CONNECT" => return Ok(req),
 
-            // If method is "PING", respond with a 200 status code, and wait for the next request.
-            "PING" => {
-                HttpResponse::new(204, "PONG", req.get_version())
-                    .write_to_stream(stream)
-                    .await?;
-            }
-
             // Otherwise, respond with a 405 status code, and wait for the next request.
             _ => {
                 HttpResponse::new(405, "Method Not Allowed", req.get_version())

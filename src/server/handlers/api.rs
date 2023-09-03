@@ -7,7 +7,7 @@ use crate::{
     utils::{NeckResult, NeckStream},
 };
 
-use super::super::NeckServer;
+use super::super::{static_manager::get_static_matcher, NeckServer};
 
 pub async fn api_handler(
     stream: NeckStream,
@@ -43,16 +43,11 @@ pub async fn api_handler(
                 .await?;
             id += 1;
         }
-    } else if uri.eq("/dashboard") && req.get_method().eq("GET") {
-        HttpResponse::new(200, "OK", req.get_version())
-            .add_payload(include_bytes!("../../static/index.html"))
-            .add_header("Content-Type: text/html")
-            .add_header("Cache-Control: no-cache")
-            .write_to_stream(&stream)
-            .await?;
+    } else if req.get_method().eq("GET") {
+        get_static_matcher().execute(req, &stream).await?;
     } else {
-        HttpResponse::new(404, "Not Found", req.get_version())
-            .add_payload(b"Not Found\n")
+        HttpResponse::new(405, "Not Allowed", req.get_version())
+            .add_payload(b"Not Allowed\n")
             .add_header("Cache-Control: no-cache")
             .write_to_stream(&stream)
             .await?;

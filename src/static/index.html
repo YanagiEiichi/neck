@@ -19,76 +19,7 @@
     font-weight: bold;
   }
 </style>
-<script>
-  function singleFlight(asyncFunc) {
-    let tasks = [];
-    const push = () => {
-      let task = asyncFunc();
-      task.finally(() => tasks.pop());
-      return task;
-    };
-    return () => {
-      switch (tasks.length) {
-        case 0:
-          tasks[0] = push();
-          return tasks[0];
-        case 1:
-          tasks[1] = tasks[0].then(push, push);
-        case 2:
-          return tasks[1];
-      }
-    };
-  }
-
-  class DataService {
-    constructor() {
-      this.#keeper();
-    }
-
-    #et = new EventTarget();
-
-    addEventListener(...args) {
-      return this.#et.addEventListener(...args);
-    }
-    removeEventListener(...args) {
-      return this.#et.removeEventListener(...args);
-    }
-
-    async #keeper() {
-      for (;;) {
-        try {
-          this.#update();
-          await this.#initiateEventSource();
-        } catch (e) {
-          void e;
-        }
-        await new Promise((f) => setTimeout(f, 1000));
-      }
-    }
-
-    #update = singleFlight(async () => {
-      return fetch("api/sessions")
-        .then((res) => res.json())
-        .then((list) => {
-          this.#et.dispatchEvent(new CustomEvent("update", { detail: list }));
-        });
-    });
-
-    #initiateEventSource = singleFlight(
-      () =>
-        new Promise((resolve, reject) => {
-          let es = new EventSource("api/events");
-          es.addEventListener("update", this.#update);
-          es.addEventListener("error", () => {
-            es.close();
-            reject();
-          });
-        })
-    );
-  }
-
-  const dataService = new DataService();
-
+<script type="module">
   import { dataService } from "./dataService.js";
 
   const renderTable = async () => {

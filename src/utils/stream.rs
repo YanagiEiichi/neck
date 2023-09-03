@@ -1,4 +1,7 @@
-use std::{cell::UnsafeCell, future::Future, marker::PhantomPinned, net::SocketAddr, pin::Pin};
+use std::{
+    cell::UnsafeCell, future::Future, marker::PhantomPinned, net::SocketAddr, pin::Pin,
+    time::Duration,
+};
 
 use tokio::{
     io::{self, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter},
@@ -88,34 +91,66 @@ impl NeckStream {
         self.writer.lock().await.shutdown().await
     }
 
-    async fn wait_until_close<T>(&self) -> NeckResult<T> {
+    /// Perform a quick check using the standard `fill_buf` method of `BufReader`.
+    /// This method will wait until any bytes are received from system buffer, unless it receives an EOF.
+    /// Therefore, if this buffer is empty, it indicates that this connection has been closed by peer.
+    async fn quick_check_eof(&self) -> NeckResult<()> {
         let mut reader = self.reader.lock().await;
-
-        // Fast check.
         let buf = reader.fill_buf().await?;
         if buf.is_empty() {
             return NeckError::wrap("Closed by peer");
         }
-
-        // Try to peek raw TCP socket.
-        let mut buf = Vec::new();
-        if self
-            .raw
-            .lock()
-            .await
-            .get_mut()
-            .get_tcp_stream_ref()
-            .peek(&mut buf)
-            .await?
-            == 0
-        {
-            return NeckError::wrap("Closed by peer");
-        }
-
-        return NeckError::wrap("Buffer overflow");
+        Ok(())
     }
 
-    pub async fn wait_toggle<T>(&self, task: impl Future<Output = T>) -> NeckResult<T> {
+    /// Get the raw `TcpStream` and peek it.
+    pub async fn peek_raw_tck_stream(&self) -> Result<usize, io::Error> {
+        let mut raw = self.raw.lock().await;
+        let mut buf = [0; 1];
+        raw.get_mut().get_tcp_stream_ref().peek(&mut buf).await
+    }
+
+    /// Wait until this connection closed by peer.
+    pub async fn wait_until_close<T>(&self) -> NeckResult<T> {
+        self.quick_check_eof().await?;
+
+        // Regarding detecting a FIN, this is a complex problem.
+        // Here, I am simply polling using `peek` mehtod on the system buffer.
+        // If the system buffer is empty, it indicates that this connection has been closed by peer.
+        // If the system buffer is truly empty but not FIN-ed, the `peek` will wait until any bytes are received,
+        // so, if zero size buffer are peeked, it guarantee that the stream has reached EOF, i.e. TCP received a FIN.
+        //
+        // In fact, there are more complex cases:
+        //
+        // CASE 1: The buffer is empty, nothing to receive.
+        //         The routine will be waiting at `peek` until any bytes are received.
+        // CASE 2: The buffer is empty, but a FIN is received.
+        //         The `while` loop will break, return an `Err`.
+        // CASE 3: The buffer is not empty, data has not been read into the application layer.
+        //         Polling `peek` until all system buffer read by application layer, i.e., read by `BufReader`.
+        //         This is an ugliy way, but I have not better solution to handler this case.
+        // CASE 4: The buffer is not empty, but a FIN received.
+        //         Emmm, I can only wish the `BufReader` reads all bytes fastly.
+        //         Because receive the FIN and replay a ACT is the system behavior,
+        //         this thing could not be notified to application layer.
+        //         However, polling the `TCP_INFO` using the system API `getsockopt` can retrieve the connection state.
+        //         A CLOSE_WAIT connection indicates that a FIN has received,
+        //         but this solution is too messy as the system APIs differs between operating systems,
+        //         I do not want write complex shit here.
+        // CASE 5: The buffer is full, TCP window size is fully utilized.
+        //         This is hell case. The client would not be able to send a FIN packet since the buffer if full,
+        //         server side has no way to know client sent a FIN.
+        //
+        while self.peek_raw_tck_stream().await? > 0 {
+            tokio::time::sleep(Duration::from_secs(1)).await
+        }
+
+        return NeckError::wrap("Closed by peer");
+    }
+
+    /// Wait for a `Future` while this connection is being ESTABLISHED.
+    /// In other words, if this connection closed by peer, abandon waiting for the `Future`.
+    pub async fn wait_together<T>(&self, task: impl Future<Output = T>) -> NeckResult<T> {
         select! {
           v = task => Ok(v),
           v = self.wait_until_close() => v

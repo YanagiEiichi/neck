@@ -14,7 +14,7 @@ async fn connect_upstream(
     version: &str,
     ctx: &Arc<NeckServer>,
 ) -> NeckResult<Arc<NeckStream>> {
-    match stream.wait_toggle(ctx.manager.connect(session)).await? {
+    match stream.wait_together(ctx.manager.connect(session)).await? {
         ConnectingResult::Ok(v) => Ok(v),
 
         // Not enough available worker connections in the manager.

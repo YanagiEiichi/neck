@@ -2,7 +2,6 @@ use std::{collections::HashMap, net::SocketAddr, ops::Add, sync::Arc, time::Dura
 
 use rand::Rng;
 use tokio::{
-    io::AsyncBufReadExt,
     sync::{Mutex, Notify},
     time::{timeout, timeout_at, Instant},
 };
@@ -127,7 +126,7 @@ impl PoolModeManager {
                 // Set a maximum waiting duration.
                 Duration::from_secs(secs),
                 // The `fill_buf` method will wait if its buffer is empty.
-                stream.reader.lock().await.fill_buf(),
+                stream.wait_until_close::<()>(),
             )
             .await
             {

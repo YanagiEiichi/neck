@@ -17,8 +17,7 @@ use super::{ConnectingResult, ConnectionManager, PBF};
 pub struct PoolModeManager {
     size: usize,
     storage: Arc<Mutex<HashMap<SocketAddr, Arc<NeckStream>>>>,
-    // TODO: rename
-    notify: Arc<Notify>,
+    conn_joined: Arc<Notify>,
 }
 
 impl PoolModeManager {
@@ -26,7 +25,7 @@ impl PoolModeManager {
         Self {
             size,
             storage: Arc::new(Mutex::new(HashMap::new())),
-            notify: Arc::new(Notify::new()),
+            conn_joined: Arc::new(Notify::new()),
         }
     }
 
@@ -47,7 +46,7 @@ impl PoolModeManager {
                 return result;
             }
             // Otherwise, wait for a notification to retry it, and if the timeout occurs, return None.
-            if timeout_at(deadline, self.notify.notified()).await.is_err() {
+            if let Err(_) = timeout_at(deadline, self.conn_joined.notified()).await {
                 return None;
             }
         }
@@ -93,7 +92,7 @@ impl PoolModeManager {
         s.insert(addr, stream);
 
         // When a stream is inserted to the pool, notify a waiting routine to attempt to retrieval.
-        self.notify.notify_one();
+        self.conn_joined.notify_one();
 
         true
     }

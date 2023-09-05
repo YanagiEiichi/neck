@@ -26,8 +26,7 @@ pub fn enable_keepalive(stream: TcpStream) -> TcpStream {
     let socket = Socket::from(stream.into_std().unwrap());
     let keepalive = TcpKeepalive::new()
         .with_time(Duration::from_secs(4))
-        .with_interval(Duration::from_secs(3))
-        .with_retries(4);
+        .with_interval(Duration::from_secs(3));
     socket.set_tcp_keepalive(&keepalive).unwrap();
     TcpStream::from_std(socket.into()).unwrap()
 }

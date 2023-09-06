@@ -15,7 +15,7 @@ use crate::{
 use super::{NeckResult, SupportedStream};
 
 pub struct NeckStream {
-    raw: Mutex<Box<SupportedStream>>,
+    raw: Box<SupportedStream>,
 
     pub reader: Mutex<BufReader<Box<dyn AsyncRead + Send + Unpin>>>,
     pub writer: Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
@@ -45,7 +45,7 @@ impl<T: Into<SupportedStream>> From<T> for NeckStream {
         let local_addr = buss.get_tcp_stream_ref().local_addr().unwrap();
 
         Self {
-            raw: Mutex::new(buss),
+            raw: buss,
             writer: Mutex::new(writer),
             reader: Mutex::new(BufReader::with_capacity(10240, reader)),
             peer_addr,
@@ -99,9 +99,8 @@ impl NeckStream {
 
     /// Get the raw `TcpStream` and peek it.
     pub async fn peek_raw_tck_stream(&self) -> Result<usize, io::Error> {
-        let raw = self.raw.lock().await;
         let mut buf = [0; 1];
-        raw.get_tcp_stream_ref().peek(&mut buf).await
+        self.raw.get_tcp_stream_ref().peek(&mut buf).await
     }
 
     /// Wait until this connection closed by peer.

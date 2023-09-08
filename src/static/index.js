@@ -13,19 +13,36 @@
     }
   };
 
+  const renderTime = (timestamp) => {
+    const el = document.createElement("time");
+    let nodes = [];
+    let update = () => {
+      let list = Math.floor((Date.now() - timestamp) / 1000).toString().split(/(?=(?:...)*$)/);
+      while (list.length > nodes.length) {
+        let n = new Text();
+        if (nodes.length > 0) {
+          el.appendChild(document.createElement('s'));
+        }
+        el.appendChild(n);
+        nodes.push(n);
+      }
+      const s = getSelection();
+      let inRange = el.contains(s.anchorNode) && el.contains(s.focusNode);
+      for (let i = 0; i < list.length; i++) {
+        if (nodes[i].data !== list[i]) nodes[i].data = list[i];
+      }
+      if (inRange) s.selectAllChildren(el);
+    }
+    update();
+    let timer = setInterval(() => {
+      if (!el.parentNode) return clearInterval(timer);
+      update()
+    }, 100);
+    return el;
+  };
+
   const renderTable = async () => {
     const table = document.createElement("table");
-
-    const renderTime = (timestamp) => {
-      const el = document.createElement("time");
-      let value = () => Math.floor((Date.now() - timestamp) / 1000) + "s";
-      el.innerHTML = value();
-      let timer = setInterval(() => {
-        if (!el.parentNode) return clearInterval(timer);
-        el.innerHTML = value();
-      }, 100);
-      return el;
-    };
 
     const createRow = (data) => {
       const row = table.insertRow();
@@ -37,8 +54,11 @@
         cells[2].innerHTML = renderState(data.state);
         cells[3].textContent = data.host;
         cells[4].textContent = data.from;
-        cells[5].innerHTML = "";
-        cells[5].appendChild(renderTime(data.timestamp));
+        if (cells[5].timestampe !== data.timestamp) {
+          cells[5].timestampe = data.timestamp;
+          cells[5].innerHTML = "";
+          cells[5].appendChild(renderTime(data.timestamp));
+        }
       };
       row.update(data);
       return row;

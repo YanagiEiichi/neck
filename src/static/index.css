@@ -48,3 +48,22 @@ tr:first-child {
   background: #fafafa;
   font-weight: bold;
 }
+
+td:nth-child(6) {
+  text-align: right;
+}
+
+td:nth-child(6) time::after {
+  content: 's';
+  opacity: .5;
+  margin-left: .5ch;
+}
+
+td:nth-child(6) s {
+  text-decoration: none;
+}
+
+td:nth-child(6) s::after {
+  content: ',';
+  opacity: .5;
+}

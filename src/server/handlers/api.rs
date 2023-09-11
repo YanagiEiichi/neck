@@ -33,6 +33,12 @@ pub async fn api_handler(
             .write_to_stream(&stream)
             .await?;
         let mut id = 1;
+        stream
+            .writer
+            .lock()
+            .await
+            .write_all(format!("id: {}\nevent: init\ndata: null\n\n", id).as_bytes())
+            .await?;
         loop {
             ctx.session_manager.watch().await;
             stream

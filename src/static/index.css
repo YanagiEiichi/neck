@@ -39,12 +39,12 @@ header .activityState::before {
   border-radius: 100%;
 }
 
-header .activityState.active::before {
-  background: green;
+header .activityState::before {
+  background: linear-gradient(135deg, hsl(0, 0%, 60%), hsl(0, 0%, 40%));
 }
 
-header .activityState.inactive::before {
-  background: darkred;
+body.living header .activityState::before {
+  background: linear-gradient(135deg, hsl(150, 88%, 50%), hsl(150, 55%, 50%));
 }
 
 tr:first-child {

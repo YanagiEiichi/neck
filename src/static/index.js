@@ -102,8 +102,7 @@ const renderHeader = () => {
 
   const a = Array.from({ length }, (_, index) => {
     if (index) header.appendChild(new Text(", "));
-    header.insertAdjacentHTML("beforeEnd", renderState(index));
-    header.appendChild(new Text(": "));
+    header.insertAdjacentHTML("beforeEnd", renderState(index) + ': ');
     let v = document.createElement("var");
     v.textContent = 0;
     header.appendChild(v);
@@ -112,16 +111,14 @@ const renderHeader = () => {
 
   let activityState = document.createElement("div");
   activityState.className = "activityState";
-  header.appendChild(activityState);
   dataService.addEventListener("active", (e) => {
-    activityState.classList.add("active");
-    activityState.classList.remove("inactive");
+    activityState.title = 'Online';
+  });
+  dataService.addEventListener("inactive", (e) => {
+    activityState.title = 'Offline';
   });
 
-  dataService.addEventListener("inactive", (e) => {
-    activityState.classList.remove("active");
-    activityState.classList.add("inactive");
-  });
+  header.appendChild(activityState);
 
   dataService.addEventListener("update", (e) => {
     const { detail } = e;
@@ -136,6 +133,14 @@ const renderHeader = () => {
 };
 
 const main = async () => {
+  dataService.addEventListener("active", (e) => {
+    document.body.classList.add("living");
+  });
+
+  dataService.addEventListener("inactive", (e) => {
+    document.body.classList.remove("living");
+  });
+
   renderHeader();
   renderTable();
 };

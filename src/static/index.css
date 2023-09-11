@@ -1,12 +1,15 @@
 body {
   font-family: "Helvetica Neue", Arial;
   color: #333;
+  margin: 1em;
 }
+
 table {
   box-sizing: border-box;
   border-collapse: collapse;
   width: 100%;
 }
+
 td {
   padding: 0.5em 1em;
   border: 1px solid #eee;
@@ -54,9 +57,9 @@ td:nth-child(6) {
 }
 
 td:nth-child(6) time::after {
-  content: 's';
-  opacity: .5;
-  margin-left: .5ch;
+  content: "s";
+  opacity: 0.5;
+  margin-left: 0.5ch;
 }
 
 td:nth-child(6) s {
@@ -64,6 +67,6 @@ td:nth-child(6) s {
 }
 
 td:nth-child(6) s::after {
-  content: ',';
-  opacity: .5;
+  content: ",";
+  opacity: 0.5;
 }

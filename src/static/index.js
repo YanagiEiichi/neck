@@ -66,10 +66,9 @@ const renderTable = async () => {
     return row;
   };
 
-  dataService.addEventListener("update", (e) => {
-    let list = e.detail;
-    let m = new Map(list.map((i) => [String(i.id), i]));
-    let { rows } = table;
+  const updateTableData = (list) => {
+    const m = new Map(list.map((i) => [String(i.id), i]));
+    const { rows } = table;
     for (let i = 1; i < rows.length; i++) {
       let row = rows[i];
       let data = m.get(row.dataset.id);
@@ -84,6 +83,13 @@ const renderTable = async () => {
     for (const data of m.values()) {
       createRow(data);
     }
+  };
+
+  dataService.addEventListener("update", (e) => {
+    updateTableData(e.detail);
+  });
+  dataService.addEventListener("inactive", (e) => {
+    updateTableData([]);
   });
 
   let row = table.insertRow();
@@ -102,7 +108,7 @@ const renderHeader = () => {
 
   const a = Array.from({ length }, (_, index) => {
     if (index) header.appendChild(new Text(", "));
-    header.insertAdjacentHTML("beforeEnd", renderState(index) + ': ');
+    header.insertAdjacentHTML("beforeEnd", renderState(index) + ": ");
     let v = document.createElement("var");
     v.textContent = 0;
     header.appendChild(v);
@@ -111,22 +117,25 @@ const renderHeader = () => {
 
   let activityState = document.createElement("div");
   activityState.className = "activityState";
-  dataService.addEventListener("active", (e) => {
-    activityState.title = 'Online';
-  });
-  dataService.addEventListener("inactive", (e) => {
-    activityState.title = 'Offline';
-  });
-
   header.appendChild(activityState);
 
-  dataService.addEventListener("update", (e) => {
-    const { detail } = e;
+  const update = (list) => {
     let map = Array(length).fill(0);
-    detail.forEach((i) => map[i.state]++);
+    list.forEach((i) => map[i.state]++);
     map.forEach((v, i) => {
       a[i].innerHTML = v;
     });
+  };
+
+  dataService.addEventListener("active", (e) => {
+    activityState.title = "Online";
+  });
+  dataService.addEventListener("inactive", (e) => {
+    activityState.title = "Offline";
+    update([]);
+  });
+  dataService.addEventListener("update", (e) => {
+    update(e.detail);
   });
 
   document.body.append(header);

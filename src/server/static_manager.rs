@@ -19,6 +19,8 @@ impl StaticMatcher {
             Some("js") => "application/javascript",
             Some("html") => "text/html",
             Some("css") => "text/css",
+            Some("svg") => "image/svg+xml",
+            Some("png") => "image/png",
             None => "text/html",
             _ => "text/plain",
         }
@@ -53,6 +55,7 @@ pub fn get_static_matcher() -> &'static StaticMatcher {
               .add_route("/utils.js", include_bytes!("../static/utils.js"))
               .add_route("/index.js", include_bytes!("../static/index.js"))
               .add_route("/index.css", include_bytes!("../static/index.css"))
+              .add_route("/neck.png", include_bytes!("../static/neck.png"))
               .add_route(
                   "/dataService.js",
                   include_bytes!("../static/dataService.js"),

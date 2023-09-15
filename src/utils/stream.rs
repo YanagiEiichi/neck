@@ -1,4 +1,7 @@
-use std::{future::Future, marker::PhantomPinned, net::SocketAddr, pin::Pin, time::Duration, ptr::addr_of_mut};
+use std::{
+    future::Future, marker::PhantomPinned, net::SocketAddr, pin::Pin, ptr::addr_of_mut,
+    time::Duration,
+};
 
 use tokio::{
     io::{self, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter},

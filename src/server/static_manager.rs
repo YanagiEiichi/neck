@@ -1,6 +1,9 @@
 use std::{collections::HashMap, sync::Once};
 
-use crate::{http::{HttpRequest, HttpResponse}, utils::NeckStream};
+use crate::{
+    http::{HttpRequest, HttpResponse},
+    utils::NeckStream,
+};
 
 pub struct StaticMatcher(HashMap<&'static str, &'static [u8]>);
 
@@ -46,22 +49,23 @@ impl StaticMatcher {
 }
 
 pub fn get_static_matcher() -> &'static StaticMatcher {
-  static mut CACHE: Option<StaticMatcher> = None;
-  static INIT: Once = Once::new();
-  INIT.call_once(|| {
-      unsafe {
-          let matcher = StaticMatcher::new()
-              .add_route("/dashboard", include_bytes!("../static/index.html"))
-              .add_route("/utils.js", include_bytes!("../static/utils.js"))
-              .add_route("/index.js", include_bytes!("../static/index.js"))
-              .add_route("/index.css", include_bytes!("../static/index.css"))
-              .add_route("/neck.png", include_bytes!("../static/neck.png"))
-              .add_route(
-                  "/dataService.js",
-                  include_bytes!("../static/dataService.js"),
-              );
-          CACHE = Some(matcher);
-      };
-  });
-  return unsafe { CACHE.as_ref().unwrap() };
+    static mut CACHE: Option<StaticMatcher> = None;
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        unsafe {
+            let matcher = StaticMatcher::new()
+                .add_route("/dashboard", include_bytes!("../static/index.html"))
+                .add_route("/utils.js", include_bytes!("../static/utils.js"))
+                .add_route("/index.js", include_bytes!("../static/index.js"))
+                .add_route("/index.css", include_bytes!("../static/index.css"))
+                .add_route("/neck.png", include_bytes!("../static/neck.png"))
+                .add_route("/liveTime.js", include_bytes!("../static/liveTime.js"))
+                .add_route(
+                    "/dataService.js",
+                    include_bytes!("../static/dataService.js"),
+                );
+            CACHE = Some(matcher);
+        };
+    });
+    return unsafe { CACHE.as_ref().unwrap() };
 }

@@ -32,14 +32,14 @@ export const renderState = (s) => {
 };
 
 export const groupBy = (list, name) => {
-    const map = Object.create(null);
-    list.forEach((i) => {
-      let v = i[name];
-      if (v in map) {
-        map[v]++;
-      } else {
-        map[v] = 1;
-      }
-    });
-    return map;
+  const map = Object.create(null);
+  list.forEach((i) => {
+    let v = i[name];
+    if (v in map) {
+      map[v]++;
+    } else {
+      map[v] = 1;
+    }
+  });
+  return map;
 };

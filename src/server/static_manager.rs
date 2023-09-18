@@ -12,7 +12,7 @@ impl StaticMatcher {
         StaticMatcher(HashMap::new())
     }
 
-    pub fn add_route(mut self, path: &'static str, bytes: &'static [u8]) -> Self {
+    pub fn add(mut self, path: &'static str, bytes: &'static [u8]) -> Self {
         self.0.insert(path, bytes);
         self
     }
@@ -35,7 +35,7 @@ impl StaticMatcher {
             HttpResponse::new(200, "OK", req.get_version())
                 .add_payload(bytes)
                 .add_header_kv("Content-Type", StaticMatcher::get_type_by_path(path))
-                .add_header("Cache-Control: no-cache")
+                .add_header("Cache-Control: max-age=10")
                 .write_to_stream(&stream)
                 .await
         } else {
@@ -54,13 +54,36 @@ pub fn get_static_matcher() -> &'static StaticMatcher {
     INIT.call_once(|| {
         unsafe {
             let matcher = StaticMatcher::new()
-                .add_route("/dashboard", include_bytes!("../static/index.html"))
-                .add_route("/utils.js", include_bytes!("../static/utils.js"))
-                .add_route("/index.js", include_bytes!("../static/index.js"))
-                .add_route("/index.css", include_bytes!("../static/index.css"))
-                .add_route("/neck.png", include_bytes!("../static/neck.png"))
-                .add_route("/liveTime.js", include_bytes!("../static/liveTime.js"))
-                .add_route(
+                .add("/dashboard", include_bytes!("../static/index.html"))
+                .add("/utils.js", include_bytes!("../static/utils.js"))
+                .add("/index.js", include_bytes!("../static/index.js"))
+                .add("/index.css", include_bytes!("../static/index.css"))
+                .add("/neck.png", include_bytes!("../static/neck.png"))
+                .add(
+                    "/components/activityState.js",
+                    include_bytes!("../static/components/activityState.js"),
+                )
+                .add(
+                    "/components/header.js",
+                    include_bytes!("../static/components/header.js"),
+                )
+                .add(
+                    "/components/liveTime.js",
+                    include_bytes!("../static/components/liveTime.js"),
+                )
+                .add(
+                    "/components/mainTable.js",
+                    include_bytes!("../static/components/mainTable.js"),
+                )
+                .add(
+                    "/components/stateBar.js",
+                    include_bytes!("../static/components/stateBar.js"),
+                )
+                .add(
+                    "/components/tableTip.js",
+                    include_bytes!("../static/components/tableTip.js"),
+                )
+                .add(
                     "/dataService.js",
                     include_bytes!("../static/dataService.js"),
                 );

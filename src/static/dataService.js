@@ -29,11 +29,14 @@ class DataService {
   #update = singleFlight(async () => {
     return fetch("api/sessions")
       .then((res) => res.json())
-      .then((list) => {
-        this.#et.dispatchEvent(new CustomEvent("update", { detail: list }));
-      }, () => {
-        this.#et.dispatchEvent(new CustomEvent("update", { detail: [] }));
-      });
+      .then(
+        (list) => {
+          this.#et.dispatchEvent(new CustomEvent("update", { detail: list }));
+        },
+        () => {
+          this.#et.dispatchEvent(new CustomEvent("update", { detail: [] }));
+        }
+      );
   });
 
   #initiateEventSource = singleFlight(

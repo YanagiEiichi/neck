@@ -32,21 +32,6 @@ header var {
   font-style: normal;
 }
 
-header .activityState {
-  width: 1em;
-  height: 1em;
-  display: block;
-  border-radius: 100%;
-}
-
-header .activityState {
-  background: linear-gradient(135deg, hsl(0, 0%, 60%), hsl(0, 0%, 40%));
-}
-
-body.living header .activityState {
-  background: linear-gradient(135deg, hsl(150, 88%, 50%), hsl(150, 55%, 50%));
-}
-
 main {
   overflow: auto;
   padding: 1em;
@@ -84,6 +69,20 @@ td:nth-child(6) {
   text-align: right;
 }
 
+.activityState {
+  width: 1em;
+  height: 1em;
+  display: block;
+  border-radius: 100%;
+}
+
+.activityState {
+  background: linear-gradient(135deg, hsl(0, 0%, 60%), hsl(0, 0%, 40%));
+}
+
+body.living .activityState {
+  background: linear-gradient(135deg, hsl(150, 88%, 50%), hsl(150, 55%, 50%));
+}
 
 .liveTime::after {
   content: "s";
@@ -98,4 +97,11 @@ td:nth-child(6) {
 .liveTime s::after {
   content: ",";
   opacity: 0.5;
+}
+
+.tableTip {
+  margin: 1em;
+  padding: 2em;
+  text-align: center;
+  color: gray;
 }

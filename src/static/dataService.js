@@ -31,6 +31,8 @@ class DataService {
       .then((res) => res.json())
       .then((list) => {
         this.#et.dispatchEvent(new CustomEvent("update", { detail: list }));
+      }, () => {
+        this.#et.dispatchEvent(new CustomEvent("update", { detail: [] }));
       });
   });
 
@@ -38,7 +40,7 @@ class DataService {
     () =>
       new Promise((_, reject) => {
         let es = new EventSource("api/events");
-        es.addEventListener("open", () => {
+        es.addEventListener("init", () => {
           this.#et.dispatchEvent(new CustomEvent("active"));
         });
         es.addEventListener("update", this.#update);

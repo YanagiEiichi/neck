@@ -47,9 +47,6 @@ const createTable = () => {
   dataService.addEventListener("update", (e) => {
     updateTableData(e.detail);
   });
-  dataService.addEventListener("inactive", (e) => {
-    updateTableData([]);
-  });
 
   const row = table.insertRow();
   row.insertCell().textContent = "ID";
@@ -66,10 +63,10 @@ const createActivityState = () => {
   const div = document.createElement("div");
   div.className = "activityState";
 
-  dataService.addEventListener("active", (e) => {
+  dataService.addEventListener("active", () => {
     div.title = "Online";
   });
-  dataService.addEventListener("inactive", (e) => {
+  dataService.addEventListener("inactive", () => {
     div.title = "Offline";
   });
 
@@ -90,19 +87,13 @@ const createStateBar = () => {
     return v;
   });
 
-  const update = (list) => {
+  dataService.addEventListener("update", (e) => {
+    const { detail: list } = e;
     const map = Array(length).fill(0);
     list.forEach((i) => map[i.state]++);
     map.forEach((v, i) => {
       a[i].innerHTML = v;
     });
-  };
-
-  dataService.addEventListener("inactive", (e) => {
-    update([]);
-  });
-  dataService.addEventListener("update", (e) => {
-    update(e.detail);
   });
 
   return div;
@@ -121,18 +112,49 @@ const createHeader = () => {
 };
 
 const main = async () => {
-  dataService.addEventListener("active", (e) => {
+  document.body.appendChild(createHeader());
+
+  const main = document.createElement("main");
+  const tip = createTableTip();
+
+  dataService.addEventListener("active", () => {
     document.body.classList.add("living");
   });
 
-  dataService.addEventListener("inactive", (e) => {
+  dataService.addEventListener("inactive", () => {
     document.body.classList.remove("living");
   });
 
-  document.body.appendChild(createHeader());
-  const main = document.createElement("main");
+  dataService.addEventListener("update", (e) => {
+    let { detail } = e;
+    tip.update("Empty");
+    if (detail.length) {
+      tip.update();
+    } else {
+      tip.update("Empty");
+    }
+  });
+
   main.appendChild(createTable());
+  main.appendChild(tip);
   document.body.appendChild(main);
+};
+
+const createTableTip = () => {
+  const div = document.createElement("div");
+  div.className = "tableTip";
+  const empty = new Comment(" TableTip ");
+  const update = (html) => {
+    if (html) {
+      div.innerHTML = html;
+      if (empty.parentNode) empty.replaceWith(div);
+    } else {
+      if (div.parentNode) div.replaceWith(empty);
+    }
+  };
+  div.update = update;
+  empty.update = update;
+  return empty;
 };
 
 document.body ? main() : addEventListener("load", main);

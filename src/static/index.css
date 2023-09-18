@@ -9,9 +9,7 @@ body {
 
 header {
   width: 100%;
-  --header-height: 50px;
-  height: var(--header-height);
-  line-height: var(--header-height);
+  height: 50px;
   box-sizing: border-box;
 
   background: #fff;
@@ -20,8 +18,13 @@ header {
   box-shadow: 0 4px 6px #0000000d;
 
   display: grid;
-  grid: auto / 1fr 1em;
+  grid: auto / auto 1fr auto;
   align-items: center;
+}
+
+header img {
+  width: 32px;
+  margin-right: 1em;
 }
 
 header var {

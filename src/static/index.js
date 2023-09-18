@@ -111,6 +111,10 @@ const createStateBar = () => {
 const createHeader = () => {
   const header = document.createElement("header");
 
+  const img = new Image();
+  img.src = "./neck.png";
+  img.alt = "logo";
+  header.appendChild(img);
   header.appendChild(createStateBar());
   header.appendChild(createActivityState());
   return header;
@@ -126,7 +130,7 @@ const main = async () => {
   });
 
   document.body.appendChild(createHeader());
-  const main = document.createElement('main');
+  const main = document.createElement("main");
   main.appendChild(createTable());
   document.body.appendChild(main);
 };

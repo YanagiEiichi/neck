@@ -1,21 +1,18 @@
 body {
   font-family: "Helvetica Neue", Arial;
   color: #333;
-  margin: 1em;
-  --header-height: 50px;
-  padding-top: var(--header-height);
+  margin: 0;
+  display: grid;
+  grid: auto 1fr / auto;
+  height: 100vh;
 }
 
 header {
   width: 100%;
+  --header-height: 50px;
   height: var(--header-height);
   line-height: var(--header-height);
   box-sizing: border-box;
-
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 1;
 
   background: #fff;
   padding: 0em 2em;
@@ -45,6 +42,12 @@ header .activityState {
 
 body.living header .activityState {
   background: linear-gradient(135deg, hsl(150, 88%, 50%), hsl(150, 55%, 50%));
+}
+
+main {
+  overflow: auto;
+  padding: 1em;
+  box-sizing: border-box;
 }
 
 table {

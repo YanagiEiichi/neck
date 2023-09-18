@@ -126,7 +126,9 @@ const main = async () => {
   });
 
   document.body.appendChild(createHeader());
-  document.body.appendChild(createTable());
+  const main = document.createElement('main');
+  main.appendChild(createTable());
+  document.body.appendChild(main);
 };
 
 document.body ? main() : addEventListener("load", main);

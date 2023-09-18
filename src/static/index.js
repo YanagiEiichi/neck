@@ -1,6 +1,6 @@
 import { dataService } from "./dataService.js";
 import { createLiveTime } from "./liveTime.js";
-import { renderState } from "./utils.js";
+import { groupBy, renderState } from "./utils.js";
 
 const createTable = () => {
   const table = document.createElement("table");
@@ -65,9 +65,11 @@ const createActivityState = () => {
 
   dataService.addEventListener("active", () => {
     div.title = "Online";
+    div.classList.add("living");
   });
   dataService.addEventListener("inactive", () => {
     div.title = "Offline";
+    div.classList.remove("living");
   });
 
   return div;
@@ -89,11 +91,10 @@ const createStateBar = () => {
 
   dataService.addEventListener("update", (e) => {
     const { detail: list } = e;
-    const map = Array(length).fill(0);
-    list.forEach((i) => map[i.state]++);
-    map.forEach((v, i) => {
-      a[i].innerHTML = v;
-    });
+    let m = groupBy(list, "state");
+    for (let i = 0; i < 3; i++) {
+      a[i].innerHTML = m[i] || 0;
+    }
   });
 
   return div;
@@ -111,35 +112,6 @@ const createHeader = () => {
   return header;
 };
 
-const main = async () => {
-  document.body.appendChild(createHeader());
-
-  const main = document.createElement("main");
-  const tip = createTableTip();
-
-  dataService.addEventListener("active", () => {
-    document.body.classList.add("living");
-  });
-
-  dataService.addEventListener("inactive", () => {
-    document.body.classList.remove("living");
-  });
-
-  dataService.addEventListener("update", (e) => {
-    let { detail } = e;
-    tip.update("Empty");
-    if (detail.length) {
-      tip.update();
-    } else {
-      tip.update("Empty");
-    }
-  });
-
-  main.appendChild(createTable());
-  main.appendChild(tip);
-  document.body.appendChild(main);
-};
-
 const createTableTip = () => {
   const div = document.createElement("div");
   div.className = "tableTip";
@@ -155,6 +127,37 @@ const createTableTip = () => {
   div.update = update;
   empty.update = update;
   return empty;
+};
+
+const main = async () => {
+  document.body.appendChild(createHeader());
+
+  const main = document.createElement("main");
+  const tip = createTableTip();
+
+  dataService.addEventListener("inactive", () => {
+    document.title = "Offline · Neck";
+  });
+
+  dataService.addEventListener("update", (e) => {
+    let { detail: list } = e;
+
+    let m = groupBy(list, "state");
+    m.length = 3;
+    let a = Array.from(m, (v) => v || 0);
+    document.title = `(${a}) · Neck`;
+
+    tip.update("Empty");
+    if (list.length) {
+      tip.update();
+    } else {
+      tip.update("Empty");
+    }
+  });
+
+  main.appendChild(createTable());
+  main.appendChild(tip);
+  document.body.appendChild(main);
 };
 
 document.body ? main() : addEventListener("load", main);

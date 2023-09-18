@@ -80,7 +80,7 @@ td:nth-child(6) {
   background: linear-gradient(135deg, hsl(0, 0%, 60%), hsl(0, 0%, 40%));
 }
 
-body.living .activityState {
+.activityState.living {
   background: linear-gradient(135deg, hsl(150, 88%, 50%), hsl(150, 55%, 50%));
 }
 

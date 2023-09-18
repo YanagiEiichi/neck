@@ -1,6 +1,8 @@
 export const createLiveTime = (timestamp) => {
   const el = document.createElement("time");
+  el.className = "liveTime";
   let nodes = [];
+
   let update = () => {
     let list = Math.floor((Date.now() - timestamp) / 1000)
       .toString()
@@ -20,10 +22,13 @@ export const createLiveTime = (timestamp) => {
     }
     if (inRange) s.selectAllChildren(el);
   };
+
   update();
+
   let timer = setInterval(() => {
     if (!el.parentNode) return clearInterval(timer);
     update();
   }, 100);
+
   return el;
 };

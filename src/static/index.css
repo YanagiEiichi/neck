@@ -63,6 +63,8 @@ td {
   padding: 1em 2em;
   border: solid #f0f0f0;
   border-width: 1px 0;
+  width: 0;
+  min-width: fit-content;
 }
 
 tr:first-child td {
@@ -74,21 +76,26 @@ tr:first-child {
   font-weight: bold;
 }
 
+td:nth-child(4) {
+  width: auto;
+}
+
 td:nth-child(6) {
   text-align: right;
 }
 
-td:nth-child(6) time::after {
+
+.liveTime::after {
   content: "s";
   opacity: 0.5;
   margin-left: 0.5ch;
 }
 
-td:nth-child(6) s {
+.liveTime s {
   text-decoration: none;
 }
 
-td:nth-child(6) s::after {
+.liveTime s::after {
   content: ",";
   opacity: 0.5;
 }

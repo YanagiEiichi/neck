@@ -62,22 +62,33 @@ const createTable = () => {
   return table;
 };
 
-const createHeader = () => {
-  const header = document.createElement("header");
+const createActivityState = () => {
+  const div = document.createElement("div");
+  div.className = "activityState";
+
+  dataService.addEventListener("active", (e) => {
+    div.title = "Online";
+  });
+  dataService.addEventListener("inactive", (e) => {
+    div.title = "Offline";
+  });
+
+  return div;
+};
+
+const createStateBar = () => {
+  const div = document.createElement("div");
+  div.className = "stateBar";
   const length = 3;
 
   const a = Array.from({ length }, (_, index) => {
-    if (index) header.appendChild(new Text(", "));
-    header.insertAdjacentHTML("beforeEnd", renderState(index) + ": ");
+    if (index) div.appendChild(new Text(", "));
+    div.insertAdjacentHTML("beforeEnd", renderState(index) + ": ");
     let v = document.createElement("var");
     v.textContent = 0;
-    header.appendChild(v);
+    div.appendChild(v);
     return v;
   });
-
-  const activityState = document.createElement("div");
-  activityState.className = "activityState";
-  header.appendChild(activityState);
 
   const update = (list) => {
     const map = Array(length).fill(0);
@@ -87,17 +98,21 @@ const createHeader = () => {
     });
   };
 
-  dataService.addEventListener("active", (e) => {
-    activityState.title = "Online";
-  });
   dataService.addEventListener("inactive", (e) => {
-    activityState.title = "Offline";
     update([]);
   });
   dataService.addEventListener("update", (e) => {
     update(e.detail);
   });
 
+  return div;
+};
+
+const createHeader = () => {
+  const header = document.createElement("header");
+
+  header.appendChild(createStateBar());
+  header.appendChild(createActivityState());
   return header;
 };
 
